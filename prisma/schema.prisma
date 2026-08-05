@@ -1,0 +1,371 @@
+// Tredella marketplace schema — buyer side now, seller/admin dashboards later.
+//
+// Dev runs on SQLite (zero setup). The schema deliberately avoids
+// SQLite-incompatible features (native enums, Json columns) so switching to
+// PostgreSQL is only: provider = "postgresql" + DATABASE_URL + `prisma db push`.
+// "Enum" fields are Strings validated in application code (src/lib/constants.ts).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+/// Roles: BUYER | SELLER | ADMIN
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  name      String
+  role      String   @default("BUYER")
+  avatar    String?
+  createdAt DateTime @default(now())
+
+  addresses     Address[]
+  wishlist      WishlistItem[]
+  cartItems     CartItem[]
+  orders        Order[]
+  reviews       Review[]
+  questions     Question[]
+  messages      Message[]
+  notifications Notification[]
+  seller        Seller?
+
+  @@index([role])
+}
+
+model Address {
+  id        String  @id @default(cuid())
+  userId    String
+  label     String // Home / Office
+  fullName  String
+  phone     String
+  line1     String
+  city      String
+  country   String  @default("UAE")
+  isDefault Boolean @default(false)
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orders Order[]
+
+  @@index([userId])
+}
+
+/// A seller's public store. userId links to the future Seller Dashboard login.
+model Seller {
+  id               String   @id @default(cuid())
+  slug             String   @unique
+  name             String
+  logo             String?
+  description      String?
+  verified         Boolean  @default(false)
+  rating           Float    @default(0)
+  positivePercent  Float    @default(0)
+  followers        Int      @default(0)
+  shipsFrom        String   @default("Dubai, UAE")
+  deliveryEstimate String   @default("3-5 Business Days")
+  freeShippingOver Float? // AED threshold, null = no free shipping
+  joinedAt         DateTime @default(now())
+  userId           String?  @unique
+
+  user         User?          @relation(fields: [userId], references: [id])
+  products     Product[]
+  sellerOrders SellerOrder[]
+  conversations Conversation[]
+}
+
+model Category {
+  id   String @id @default(cuid())
+  slug String @unique
+  name String
+  icon String?
+
+  subcategories Subcategory[]
+  products      Product[]
+}
+
+model Subcategory {
+  id         String @id @default(cuid())
+  slug       String
+  name       String
+  categoryId String
+
+  category Category  @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  products Product[]
+
+  @@unique([categoryId, slug])
+  @@index([categoryId])
+}
+
+/// Every product belongs to exactly one seller.
+/// availableRetail / availableWholesale control which mode(s) list it.
+model Product {
+  id                 String   @id @default(cuid())
+  slug               String   @unique
+  sku                String   @unique
+  name               String
+  description        String   @default("")
+  image              String
+  brand              String?
+  categoryId         String
+  subcategoryId      String
+  sellerId           String
+  retailPrice        Float
+  oldPrice           Float?
+  /// Denormalized cheapest wholesale tier price — kept in sync when tiers
+  /// change; enables efficient wholesale price sorting/filtering.
+  wholesaleFrom      Float?
+  stock              Int      @default(0)
+  minOrder           Int      @default(1) // wholesale MOQ
+  availableRetail    Boolean  @default(true)
+  availableWholesale Boolean  @default(true)
+  rating             Float    @default(0)
+  reviewsCount       Int      @default(0)
+  sold               Int      @default(0)
+  deliveryDays       String   @default("3-5")
+  freeShipping       Boolean  @default(false)
+  createdAt          DateTime @default(now())
+
+  category    Category            @relation(fields: [categoryId], references: [id])
+  subcategory Subcategory         @relation(fields: [subcategoryId], references: [id])
+  seller      Seller              @relation(fields: [sellerId], references: [id])
+  images      ProductImage[]
+  attributes  ProductAttribute[]
+  priceTiers  PriceTier[]
+  reviews     Review[]
+  questions   Question[]
+  wishlist    WishlistItem[]
+  cartItems   CartItem[]
+  orderItems  OrderItem[]
+  conversations Conversation[]
+
+  @@index([categoryId])
+  @@index([subcategoryId])
+  @@index([sellerId])
+  @@index([brand])
+  @@index([retailPrice])
+  @@index([wholesaleFrom])
+  @@index([rating])
+  @@index([createdAt])
+}
+
+model ProductImage {
+  id        String @id @default(cuid())
+  productId String
+  url       String
+  position  Int    @default(0)
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+}
+
+/// Dynamic, category-specific attributes (Brand/RAM/Color/Size/Material...).
+/// Also powers dynamic filters — no category filter logic is hardcoded in the frontend.
+model ProductAttribute {
+  id        String @id @default(cuid())
+  productId String
+  name      String
+  value     String
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+  @@index([name, value])
+}
+
+/// Wholesale quantity-tier pricing. maxQty null = "and above".
+model PriceTier {
+  id        String @id @default(cuid())
+  productId String
+  minQty    Int
+  maxQty    Int?
+  price     Float
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+}
+
+/// One review per purchased order item, only after the order is COMPLETED.
+model Review {
+  id          String   @id @default(cuid())
+  productId   String
+  userId      String
+  orderItemId String   @unique
+  rating      Int
+  text        String
+  images      String   @default("") // comma-separated URLs (SQLite-safe)
+  verified    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  product   Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id])
+  orderItem OrderItem @relation(fields: [orderItemId], references: [id])
+
+  @@index([productId])
+  @@index([userId])
+}
+
+/// Buyer questions; only the product's seller answers (enforced in resolvers,
+/// answering UI ships with the Seller Dashboard later).
+model Question {
+  id         String    @id @default(cuid())
+  productId  String
+  userId     String
+  text       String
+  answer     String?
+  answeredAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id])
+
+  @@index([productId])
+}
+
+model WishlistItem {
+  id        String   @id @default(cuid())
+  userId    String
+  productId String
+  mode      String   @default("RETAIL") // RETAIL | WHOLESALE
+  createdAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId, mode])
+  @@index([userId])
+}
+
+/// Server-side cart so web and the future mobile app share one cart.
+model CartItem {
+  id        String   @id @default(cuid())
+  userId    String
+  productId String
+  quantity  Int
+  mode      String   @default("RETAIL") // RETAIL | WHOLESALE
+  createdAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId, mode])
+  @@index([userId])
+}
+
+/// One checkout = one main Order + one SellerOrder per seller involved.
+/// Status: PENDING | CONFIRMED | SHIPPED | DELIVERED | COMPLETED | CANCELLED
+model Order {
+  id        String   @id @default(cuid())
+  userId    String
+  addressId String?
+  mode      String // RETAIL | WHOLESALE
+  status    String   @default("PENDING")
+  total     Float
+  createdAt DateTime @default(now())
+
+  user         User          @relation(fields: [userId], references: [id])
+  address      Address?      @relation(fields: [addressId], references: [id])
+  sellerOrders SellerOrder[]
+
+  @@index([userId])
+  @@index([status])
+}
+
+/// Seller-specific sub-order: independent fulfillment, status, and (later)
+/// commission + payouts.
+model SellerOrder {
+  id        String @id @default(cuid())
+  orderId   String
+  sellerId  String
+  subtotal  Float
+  status    String @default("PENDING")
+
+  order  Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  seller Seller      @relation(fields: [sellerId], references: [id])
+  items  OrderItem[]
+
+  @@index([orderId])
+  @@index([sellerId])
+}
+
+/// Snapshot of the purchased product — unitPrice is calculated by the backend
+/// from the DB (retail price or matching wholesale tier), never from client input.
+model OrderItem {
+  id            String @id @default(cuid())
+  sellerOrderId String
+  productId     String
+  name          String
+  image         String
+  mode          String
+  quantity      Int
+  unitPrice     Float
+  total         Float
+
+  sellerOrder SellerOrder @relation(fields: [sellerOrderId], references: [id], onDelete: Cascade)
+  product     Product     @relation(fields: [productId], references: [id])
+  review      Review?
+
+  @@index([sellerOrderId])
+  @@index([productId])
+}
+
+/// Conversation types: BUYER_SELLER | BUYER_ADMIN | SELLER_ADMIN.
+/// Buyer side uses the first two; the third is ready for the Seller Dashboard.
+model Conversation {
+  id        String   @id @default(cuid())
+  type      String
+  buyerId   String?
+  sellerId  String?
+  adminId   String?
+  productId String? // set when the chat starts from a product page
+  orderId   String? // set when the chat references an order
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  seller   Seller?   @relation(fields: [sellerId], references: [id])
+  product  Product?  @relation(fields: [productId], references: [id])
+  messages Message[]
+
+  @@index([buyerId])
+  @@index([sellerId])
+  @@index([type])
+}
+
+model Message {
+  id             String    @id @default(cuid())
+  conversationId String
+  senderId       String
+  text           String
+  attachment     String?
+  readAt         DateTime?
+  createdAt      DateTime  @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       User         @relation(fields: [senderId], references: [id])
+
+  @@index([conversationId])
+  @@index([senderId])
+}
+
+/// Types: MESSAGE | QUESTION_ANSWERED | ORDER_UPDATE | DELIVERY_UPDATE |
+/// REVIEW_ELIGIBLE | SYSTEM
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  type      String
+  title     String
+  body      String?
+  link      String?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, readAt])
+}
