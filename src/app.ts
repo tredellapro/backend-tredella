@@ -10,10 +10,6 @@ import { buildContext, type Context } from "./context.js";
 import { registerSocialAuthRoutes } from "./auth/social.js";
 import { registerUploadRoutes } from "./uploads.js";
 
-/* The HTTP half of the API, with no server binding — shared by the local dev
-   server (src/index.ts, which adds WebSocket subscriptions) and the Vercel
-   serverless entry (api/index.ts, which cannot hold sockets open). */
-
 export const schema: GraphQLSchema = makeExecutableSchema({ typeDefs, resolvers });
 
 /* Allow-list of browser origins. Entries may use a `*` wildcard so Vercel
