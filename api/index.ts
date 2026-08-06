@@ -27,17 +27,19 @@ export default async function handler(
   res: ServerResponse
 ) {
   try {
+    /* Express' router needs a path with a leading slash. Rewritten root
+       requests can arrive with an empty or slashless url, which throws inside
+       dispatch and surfaces as FUNCTION_INVOCATION_FAILED, so normalise it. */
+    if (!req.url) req.url = "/";
+    else if (!req.url.startsWith("/")) req.url = `/${req.url}`;
+
     const app = await getApp();
     return app(req, res);
   } catch (error) {
-    console.error("[api] failed to start:", error);
+    console.error("[api] request failed:", error);
     if (res.headersSent) return;
     res.statusCode = 500;
     res.setHeader("Content-Type", "application/json");
-    res.end(
-      JSON.stringify({
-        error: "The API failed to start. Check the server logs.",
-      })
-    );
+    res.end(JSON.stringify({ error: "Internal server error." }));
   }
 }
