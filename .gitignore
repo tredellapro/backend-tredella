@@ -4,3 +4,9 @@ dist/
 prisma/dev.db
 prisma/dev.db-journal
 *.log
+
+# locally uploaded review photos — user content, not source
+uploads/
+
+# Vercel
+.vercel/
