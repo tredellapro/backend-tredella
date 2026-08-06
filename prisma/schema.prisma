@@ -10,7 +10,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -33,8 +33,26 @@ model User {
   messages      Message[]
   notifications Notification[]
   seller        Seller?
+  resetTokens   PasswordResetToken[]
 
   @@index([role])
+}
+
+/// Single-use password reset token emailed to the user.
+/// Only the SHA-256 hash is stored, so a database leak cannot be used to
+/// reset accounts; the raw token exists only in the emailed link.
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 model Address {

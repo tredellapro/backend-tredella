@@ -250,6 +250,20 @@ async function main() {
   }
 
   console.log("Products...");
+
+  /* Demo gallery: the product's own shot first, then a few other images from
+     the same subcategory standing in for alternate views. Replace with real
+     photography per product when the catalogue is loaded for real. */
+  const galleryFor = (item: Item) => {
+    const siblings = catalog
+      .filter((c) => c.subcategory === item.subcategory && c.image !== item.image)
+      .map((c) => c.image);
+    return [item.image, ...siblings.slice(0, 4)].map((image, position) => ({
+      url: `/assets/images/products/product-${image}.png`,
+      position,
+    }));
+  };
+
   const productIds: string[] = [];
   for (let i = 0; i < catalog.length; i++) {
     const item = catalog[i];
@@ -281,11 +295,7 @@ async function main() {
         freeShipping: i % 3 === 0,
         priceTiers: { create: tiers },
         attributes: { create: attributesFor(item, i) },
-        images: {
-          create: [
-            { url: `/assets/images/products/product-${item.image}.png`, position: 0 },
-          ],
-        },
+        images: { create: galleryFor(item) },
       },
     });
     productIds.push(product.id);

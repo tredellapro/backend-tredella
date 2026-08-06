@@ -1,5 +1,7 @@
+import crypto from "node:crypto";
 import type { Context, } from "../../context.js";
 import { EVENTS } from "../../context.js";
+import { appUrl, passwordResetEmail, sendMail } from "../../lib/mailer.js";
 import type { Mode } from "../../lib/constants.js";
 import {
   badInput,
@@ -20,6 +22,38 @@ const requireUser = (ctx: Context) => {
 
 const cartOf = (ctx: Context, mode: Mode) =>
   Query.getCart(null, { mode }, ctx);
+
+/** Only the hash is stored; the raw token travels solely in the emailed link. */
+export const hashToken = (token: string) =>
+  crypto.createHash("sha256").update(token).digest("hex");
+
+const RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour
+
+/** Products can be referenced by id or by their public slug. */
+type ProductRef = { productId?: string | null; productSlug?: string | null };
+
+const productWhere = ({ productId, productSlug }: ProductRef) => {
+  if (!productId && !productSlug)
+    throw badInput("A productId or productSlug is required.");
+  return productId ? { id: productId } : { slug: productSlug! };
+};
+
+const findProduct = async (ctx: Context, ref: ProductRef) => {
+  const product = await ctx.prisma.product.findFirst({
+    where: productWhere(ref),
+  });
+  if (!product) throw badInput("Product not found.");
+  return product;
+};
+
+const findProductWithTiers = async (ctx: Context, ref: ProductRef) => {
+  const product = await ctx.prisma.product.findFirst({
+    where: productWhere(ref),
+    include: { priceTiers: true },
+  });
+  if (!product) throw badInput("Product not found.");
+  return product;
+};
 
 export const Mutation = {
   /* ---------------- auth ---------------- */
@@ -56,6 +90,106 @@ export const Mutation = {
     };
   },
 
+  /* ---------------- password reset ---------------- */
+
+  requestPasswordReset: async (
+    _: unknown,
+    { email }: { email: string },
+    ctx: Context
+  ) => {
+    const user = await ctx.prisma.user.findUnique({
+      where: { email: email.trim().toLowerCase() },
+    });
+
+    // Respond identically whether or not the account exists, so this endpoint
+    // cannot be used to discover which emails are registered.
+    if (!user) return { ok: true, emailSent: false };
+
+    // Invalidate any earlier unused tokens for this user.
+    await ctx.prisma.passwordResetToken.updateMany({
+      where: { userId: user.id, usedAt: null },
+      data: { usedAt: new Date() },
+    });
+
+    const token = crypto.randomBytes(32).toString("hex");
+    await ctx.prisma.passwordResetToken.create({
+      data: {
+        userId: user.id,
+        tokenHash: hashToken(token),
+        expiresAt: new Date(Date.now() + RESET_TOKEN_TTL_MS),
+      },
+    });
+
+    const link = `${appUrl()}/reset-password?token=${token}`;
+    const mail = passwordResetEmail(user.name, link);
+    const { delivered } = await sendMail({ ...mail, to: user.email });
+
+    return { ok: true, emailSent: delivered };
+  },
+
+  resetPassword: async (
+    _: unknown,
+    { token, newPassword }: { token: string; newPassword: string },
+    ctx: Context
+  ) => {
+    if (newPassword.length < 6)
+      throw badInput("Password must be at least 6 characters.");
+
+    const record = await ctx.prisma.passwordResetToken.findUnique({
+      where: { tokenHash: hashToken(token) },
+      include: { user: true },
+    });
+    if (!record || record.usedAt || record.expiresAt < new Date())
+      throw badInput("This reset link is invalid or has expired.");
+
+    await ctx.prisma.$transaction([
+      ctx.prisma.user.update({
+        where: { id: record.userId },
+        data: { password: await hashPassword(newPassword) },
+      }),
+      ctx.prisma.passwordResetToken.update({
+        where: { id: record.id },
+        data: { usedAt: new Date() },
+      }),
+    ]);
+
+    await notify(ctx, record.userId, {
+      type: "SYSTEM",
+      title: "Your password was changed",
+      body: "If this wasn't you, contact support immediately.",
+    });
+
+    return {
+      token: signToken({
+        userId: record.user.id,
+        role: record.user.role as "BUYER",
+      }),
+      user: { ...record.user, password: "" },
+    };
+  },
+
+  changePassword: async (
+    _: unknown,
+    { currentPassword, newPassword }: { currentPassword: string; newPassword: string },
+    ctx: Context
+  ) => {
+    const authed = requireUser(ctx);
+    if (newPassword.length < 6)
+      throw badInput("New password must be at least 6 characters.");
+
+    const user = await ctx.prisma.user.findUnique({
+      where: { id: authed.userId },
+    });
+    if (!user || !(await comparePassword(currentPassword, user.password)))
+      throw badInput("Your current password is incorrect.");
+
+    await ctx.prisma.user.update({
+      where: { id: user.id },
+      data: { password: await hashPassword(newPassword) },
+    });
+    return true;
+  },
+
   addAddress: async (
     _: unknown,
     { input }: { input: { label: string; fullName: string; phone: string; line1: string; city: string; country?: string; isDefault?: boolean } },
@@ -82,29 +216,33 @@ export const Mutation = {
 
   addToWishlist: async (
     _: unknown,
-    { productId, mode }: { productId: string; mode: Mode },
+    args: ProductRef & { mode: Mode },
     ctx: Context
   ) => {
     const user = requireUser(ctx);
-    const product = await ctx.prisma.product.findUnique({ where: { id: productId } });
-    if (!product) throw badInput("Product not found.");
+    const product = await findProduct(ctx, args);
     return ctx.prisma.wishlistItem.upsert({
       where: {
-        userId_productId_mode: { userId: user.userId, productId, mode },
+        userId_productId_mode: {
+          userId: user.userId,
+          productId: product.id,
+          mode: args.mode,
+        },
       },
-      create: { userId: user.userId, productId, mode },
+      create: { userId: user.userId, productId: product.id, mode: args.mode },
       update: {},
     });
   },
 
   removeFromWishlist: async (
     _: unknown,
-    { productId, mode }: { productId: string; mode: Mode },
+    args: ProductRef & { mode: Mode },
     ctx: Context
   ) => {
     const user = requireUser(ctx);
+    const product = await findProduct(ctx, args);
     await ctx.prisma.wishlistItem.deleteMany({
-      where: { userId: user.userId, productId, mode },
+      where: { userId: user.userId, productId: product.id, mode: args.mode },
     });
     return true;
   },
@@ -113,23 +251,24 @@ export const Mutation = {
 
   addToCart: async (
     _: unknown,
-    { productId, quantity, mode }: { productId: string; quantity: number; mode: Mode },
+    args: ProductRef & { quantity: number; mode: Mode },
     ctx: Context
   ) => {
     const user = requireUser(ctx);
-    const product = await ctx.prisma.product.findUnique({
-      where: { id: productId },
-      include: { priceTiers: true },
-    });
-    if (!product) throw badInput("Product not found.");
+    const { quantity, mode } = args;
+    const product = await findProductWithTiers(ctx, args);
     // validates availability, MOQ, stock, and that pricing exists
     lineTotal(product, quantity, mode);
 
     await ctx.prisma.cartItem.upsert({
       where: {
-        userId_productId_mode: { userId: user.userId, productId, mode },
+        userId_productId_mode: {
+          userId: user.userId,
+          productId: product.id,
+          mode,
+        },
       },
-      create: { userId: user.userId, productId, quantity, mode },
+      create: { userId: user.userId, productId: product.id, quantity, mode },
       update: { quantity: { increment: quantity } },
     });
     return cartOf(ctx, mode);

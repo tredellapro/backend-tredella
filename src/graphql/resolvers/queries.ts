@@ -8,6 +8,7 @@ import {
   type ProductFilterInput,
   type SortBy,
 } from "./helpers.js";
+import { hashToken } from "./mutations.js";
 
 type ModeArg = { mode: Mode };
 
@@ -15,6 +16,17 @@ export const Query = {
   me: async (_: unknown, __: unknown, ctx: Context) => {
     if (!ctx.user) return null;
     return ctx.prisma.user.findUnique({ where: { id: ctx.user.userId } });
+  },
+
+  verifyResetToken: async (
+    _: unknown,
+    { token }: { token: string },
+    ctx: Context
+  ) => {
+    const record = await ctx.prisma.passwordResetToken.findUnique({
+      where: { tokenHash: hashToken(token) },
+    });
+    return Boolean(record && !record.usedAt && record.expiresAt > new Date());
   },
 
   /* ---------------- catalog ---------------- */

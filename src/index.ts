@@ -11,6 +11,8 @@ import { useServer } from "graphql-ws/lib/use/ws";
 import { typeDefs } from "./graphql/typeDefs/index.js";
 import { resolvers } from "./graphql/resolvers/index.js";
 import { buildContext, prisma, type Context } from "./context.js";
+import { registerSocialAuthRoutes } from "./auth/social.js";
+import { registerUploadRoutes } from "./uploads.js";
 
 const PORT = Number(process.env.PORT ?? 4000);
 const CORS_ORIGINS = (process.env.CORS_ORIGINS ?? "http://localhost:3000")
@@ -63,6 +65,16 @@ async function main() {
   );
 
   app.get("/health", (_req, res) => res.json({ ok: true }));
+
+  // Google / Facebook sign-in (OAuth redirect flow)
+  app.use(cors({ origin: CORS_ORIGINS, credentials: true }));
+  registerSocialAuthRoutes(app);
+
+  // Review photo uploads + static serving
+  registerUploadRoutes(
+    app,
+    process.env.API_URL ?? `http://localhost:${PORT}`
+  );
 
   httpServer.listen(PORT, () => {
     console.log(`🚀 Tredella GraphQL API   http://localhost:${PORT}/graphql`);

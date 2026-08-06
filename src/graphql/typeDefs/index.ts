@@ -54,6 +54,13 @@ const user = /* GraphQL */ `
     user: User!
   }
 
+  type PasswordResetRequestResult {
+    "Always true — never reveals whether the email is registered"
+    ok: Boolean!
+    "False when SMTP is unconfigured (dev): the link is logged to the server console"
+    emailSent: Boolean!
+  }
+
   input AddressInput {
     label: String!
     fullName: String!
@@ -347,6 +354,8 @@ const chatNotifications = /* GraphQL */ `
 const operations = /* GraphQL */ `
   type Query {
     me: User
+    "Checks a reset link before showing the new-password form"
+    verifyResetToken(token: String!): Boolean!
 
     getHomePageData(mode: Mode!): HomePageData!
     getCategories: [Category!]!
@@ -395,10 +404,17 @@ const operations = /* GraphQL */ `
     login(email: String!, password: String!): AuthPayload!
     addAddress(input: AddressInput!): Address!
 
-    addToWishlist(productId: ID!, mode: Mode!): WishlistItem!
-    removeFromWishlist(productId: ID!, mode: Mode!): Boolean!
+    "Always reports success so the response cannot reveal registered emails"
+    requestPasswordReset(email: String!): PasswordResetRequestResult!
+    "Signs the user straight in once the new password is saved"
+    resetPassword(token: String!, newPassword: String!): AuthPayload!
+    changePassword(currentPassword: String!, newPassword: String!): Boolean!
 
-    addToCart(productId: ID!, quantity: Int!, mode: Mode!): Cart!
+    "Pass either productId or productSlug — the slug is the stable public key"
+    addToWishlist(productId: ID, productSlug: String, mode: Mode!): WishlistItem!
+    removeFromWishlist(productId: ID, productSlug: String, mode: Mode!): Boolean!
+
+    addToCart(productId: ID, productSlug: String, quantity: Int!, mode: Mode!): Cart!
     updateCartItem(cartItemId: ID!, quantity: Int!): Cart!
     removeFromCart(cartItemId: ID!): Cart!
 
