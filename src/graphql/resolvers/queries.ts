@@ -351,13 +351,28 @@ export const Query = {
     { query, mode }: { query: string } & ModeArg,
     ctx: Context
   ) => {
-    if (query.trim().length < 2) return [];
+    const term = query.trim().toLowerCase();
+    if (term.length < 2) return [];
     const products = await ctx.prisma.product.findMany({
-      where: { ...modeWhere(mode), name: { contains: query } },
-      select: { name: true },
+      where: {
+        ...modeWhere(mode),
+        OR: [{ name: { contains: term } }, { brand: { contains: term } }],
+      },
+      select: { name: true, brand: true, sold: true },
       orderBy: { sold: "desc" },
-      take: 8,
+      take: 40,
     });
-    return products.map((p) => p.name);
+
+    // rank: name starts with term → a word starts with term → contains
+    const rank = (name: string) => {
+      const lower = name.toLowerCase();
+      if (lower.startsWith(term)) return 0;
+      if (lower.split(/[^a-z0-9]+/).some((w) => w.startsWith(term))) return 1;
+      return 2;
+    };
+
+    return [...new Set(products.map((p) => p.name))]
+      .sort((a, b) => rank(a) - rank(b))
+      .slice(0, 8);
   },
 };
