@@ -8,14 +8,26 @@ import { userFromAuthHeader } from "./context.js";
 
 /* Review photo uploads. Files land on local disk under /uploads and are served
    back statically — swap the storage engine for S3/Cloudinary in production
-   without touching the callers, since the API still just returns URLs. */
+   without touching the callers, since the API still just returns URLs.
+
+   Serverless hosts (Vercel) have a read-only filesystem and no persistence
+   between invocations, so disk storage is disabled there and the endpoint
+   reports that instead of failing at import time. */
 
 const UPLOAD_DIR = path.resolve(process.cwd(), "uploads");
 const MAX_FILES = 5;
 const MAX_BYTES = 5 * 1024 * 1024; // 5 MB per image
 const ALLOWED = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
 
-fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+const diskAvailable = (() => {
+  if (process.env.VERCEL) return false;
+  try {
+    fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+    return true;
+  } catch {
+    return false;
+  }
+})();
 
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, UPLOAD_DIR),
@@ -36,12 +48,19 @@ const upload = multer({
 });
 
 export const registerUploadRoutes = (app: Express, publicUrl: string) => {
-  app.use("/uploads", express.static(UPLOAD_DIR, { maxAge: "30d" }));
+  if (diskAvailable)
+    app.use("/uploads", express.static(UPLOAD_DIR, { maxAge: "30d" }));
 
   app.post("/upload/review-images", (req, res) => {
     // only signed-in shoppers may upload
     if (!userFromAuthHeader(req.headers.authorization))
       return res.status(401).json({ error: "Please sign in to upload photos." });
+
+    if (!diskAvailable)
+      return res.status(503).json({
+        error:
+          "Photo uploads are not available on this deployment. Configure object storage (S3 or Cloudinary) to enable them.",
+      });
 
     upload.array("images", MAX_FILES)(req, res, (err) => {
       if (err)
