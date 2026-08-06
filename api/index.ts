@@ -1,21 +1,43 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { createApp } from "../src/app.js";
 
-/* Vercel serverless entry. The Express app is created once per warm instance
-   and reused across invocations.
+/* Vercel serverless entry. The Express app is built once per warm instance and
+   reused; a failed build is not cached, so the next request retries instead of
+   the instance serving errors forever.
 
    Not available here (serverless has no long-lived connections or disk):
    • GraphQL subscriptions — chat and notifications fall back to fetch-on-load
    • Local file uploads — /uploads needs object storage (S3, Cloudinary, …)
    Run `npm start` on a persistent host if you need either. */
 
-let appPromise: ReturnType<typeof createApp> | null = null;
+type App = Awaited<ReturnType<typeof createApp>>;
+
+let appPromise: Promise<App> | null = null;
+
+const getApp = () => {
+  appPromise ??= createApp().catch((error) => {
+    appPromise = null; // let the next invocation try again
+    throw error;
+  });
+  return appPromise;
+};
 
 export default async function handler(
   req: IncomingMessage,
   res: ServerResponse
 ) {
-  appPromise ??= createApp();
-  const app = await appPromise;
-  return app(req, res);
+  try {
+    const app = await getApp();
+    return app(req, res);
+  } catch (error) {
+    console.error("[api] failed to start:", error);
+    if (res.headersSent) return;
+    res.statusCode = 500;
+    res.setHeader("Content-Type", "application/json");
+    res.end(
+      JSON.stringify({
+        error: "The API failed to start. Check the server logs.",
+      })
+    );
+  }
 }

@@ -49,9 +49,19 @@ export async function createApp(): Promise<Express> {
 
   app.use(cors(corsOptions));
 
-  app.get("/health", (_req, res) =>
-    res.json({ ok: true, realtime: process.env.VERCEL ? false : true })
+  const realtime = !process.env.VERCEL;
+
+  // Index — opening the API in a browser should explain itself, not 404
+  app.get("/", (_req, res) =>
+    res.json({
+      name: "Tredella marketplace API",
+      graphql: "/graphql (POST)",
+      health: "/health",
+      realtime,
+    })
   );
+
+  app.get("/health", (_req, res) => res.json({ ok: true, realtime }));
 
   app.use(
     "/graphql",
@@ -63,6 +73,23 @@ export async function createApp(): Promise<Express> {
 
   registerSocialAuthRoutes(app);
   registerUploadRoutes(app, process.env.API_URL ?? "http://localhost:4000");
+
+  app.use((_req, res) => res.status(404).json({ error: "Not found." }));
+
+  // Last-resort handler so a thrown error returns JSON instead of taking the
+  // whole serverless invocation down.
+  app.use(
+    (
+      err: Error,
+      _req: express.Request,
+      res: express.Response,
+      _next: express.NextFunction
+    ) => {
+      console.error("[api]", err);
+      if (res.headersSent) return;
+      res.status(500).json({ error: err.message || "Internal server error." });
+    }
+  );
 
   return app;
 }
