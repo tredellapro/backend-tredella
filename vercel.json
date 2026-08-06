@@ -1,6 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "prisma generate",
+  "buildCommand": "npx prisma generate",
   "functions": {
     "api/index.ts": {
       "maxDuration": 30
