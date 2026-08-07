@@ -27,9 +27,8 @@ export default async function handler(
   res: ServerResponse
 ) {
   try {
-    /* Express' router needs a path with a leading slash. Rewritten root
-       requests can arrive with an empty or slashless url, which throws inside
-       dispatch and surfaces as FUNCTION_INVOCATION_FAILED, so normalise it. */
+    /* Express' router throws on a path without a leading slash, and a rewritten
+       request can arrive with an empty url, so normalise it. */
     if (!req.url) req.url = "/";
     else if (!req.url.startsWith("/")) req.url = `/${req.url}`;
 
