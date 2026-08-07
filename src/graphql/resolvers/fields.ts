@@ -18,8 +18,6 @@ import type { Context } from "../../context.js";
 import { iso, modeWhere } from "./helpers.js";
 import type { Mode } from "../../lib/constants.js";
 
-/* Relation lookups use Prisma's fluent API (findUnique().relation()) which
-   batches identical parent queries — avoids the classic GraphQL N+1. */
 
 export const fieldResolvers = {
   User: {
@@ -147,12 +145,12 @@ export const fieldResolvers = {
     unreadCount: (c: Conversation, _: unknown, ctx: Context) =>
       ctx.user
         ? ctx.prisma.message.count({
-            where: {
-              conversationId: c.id,
-              senderId: { not: ctx.user.userId },
-              readAt: null,
-            },
-          })
+          where: {
+            conversationId: c.id,
+            senderId: { not: ctx.user.userId },
+            readAt: null,
+          },
+        })
         : 0,
   },
 

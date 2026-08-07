@@ -29,7 +29,6 @@ export const unauthenticated = () =>
     extensions: { code: "UNAUTHENTICATED" },
   });
 
-
 export const forbidden = (message = "Not allowed.") =>
   new GraphQLError(message, { extensions: { code: "FORBIDDEN" } });
 
