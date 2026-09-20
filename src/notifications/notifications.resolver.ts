@@ -1,5 +1,13 @@
 import { Inject, UseGuards } from '@nestjs/common';
-import { Args, ID, Mutation, Query, Resolver, Subscription } from '@nestjs/graphql';
+import {
+  Args,
+  ID,
+  Int,
+  Mutation,
+  Query,
+  Resolver,
+  Subscription,
+} from '@nestjs/graphql';
 import type { PubSub } from 'graphql-subscriptions';
 import { Notification } from './models/notification.model';
 import { NotificationsService } from './notifications.service';
@@ -29,6 +37,14 @@ export class NotificationsResolver {
     unreadOnly?: boolean | null,
   ): Promise<Notification[]> {
     return this.notifications.list(user.userId, unreadOnly);
+  }
+
+  @Query(() => Int, {
+    description: 'Unread count for the bell badge, without loading the list',
+  })
+  @UseGuards(GqlAuthGuard)
+  unreadNotificationCount(@CurrentUser() user: JwtPayload): Promise<number> {
+    return this.notifications.countUnread(user.userId);
   }
 
   @Mutation(() => Boolean)

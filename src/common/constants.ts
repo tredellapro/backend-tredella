@@ -31,6 +31,10 @@ export const NOTIFICATION_TYPES = [
   'ORDER_UPDATE',
   'DELIVERY_UPDATE',
   'REVIEW_ELIGIBLE',
+  // seller dashboard
+  'PRODUCT_APPROVED',
+  'PRODUCT_REJECTED',
+  'PROMOTION',
   'SYSTEM',
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];

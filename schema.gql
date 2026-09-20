@@ -490,6 +490,9 @@ type Notification {
   title: String!
   body: String
   link: String
+
+  """Thumbnail for the row; clients fall back to a type icon"""
+  image: String
   readAt: String
   createdAt: String!
 }
@@ -527,6 +530,9 @@ type Query {
   getConversations: [Conversation!]!
   getMessages(conversationId: ID!, page: Int = 1, pageSize: Int = 30): [Message!]!
   getNotifications(unreadOnly: Boolean = false): [Notification!]!
+
+  """Unread count for the bell badge, without loading the list"""
+  unreadNotificationCount: Int!
 }
 
 input ProductFilterInput {

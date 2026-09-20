@@ -18,6 +18,12 @@ export class Notification {
   @Field(() => String, { nullable: true })
   link!: string | null;
 
+  @Field(() => String, {
+    nullable: true,
+    description: 'Thumbnail for the row; clients fall back to a type icon',
+  })
+  image!: string | null;
+
   @Field(() => String, { nullable: true, middleware: [isoDate] })
   readAt!: Date | null;
 

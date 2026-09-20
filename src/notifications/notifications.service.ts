@@ -10,6 +10,8 @@ export type NotifyInput = {
   title: string;
   body?: string;
   link?: string;
+  /** Thumbnail for the row — the product, the promotion artwork, and so on. */
+  image?: string;
 };
 
 @Injectable()
@@ -29,6 +31,13 @@ export class NotificationsService {
       userId,
     });
     return notification;
+  }
+
+  /** Drives the bell badge without fetching the list behind it. */
+  countUnread(userId: string): Promise<number> {
+    return this.prisma.notification.count({
+      where: { userId, readAt: null },
+    });
   }
 
   list(

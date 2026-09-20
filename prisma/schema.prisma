@@ -540,6 +540,9 @@ model Notification {
   title     String
   body      String?
   link      String?
+  /// Thumbnail beside the row — the product, the promotion artwork, whatever
+  /// the notification is about. Falls back to a type icon when empty.
+  image     String?
   readAt    DateTime?
   createdAt DateTime  @default(now())
 
