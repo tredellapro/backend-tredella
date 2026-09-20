@@ -52,6 +52,35 @@ export class MailerService {
   }
 }
 
+/* The dashboards type the code straight into the reset screen, so this mail
+   carries no link — nothing to point at the wrong app. */
+export const passwordResetCodeEmail = (
+  name: string,
+  code: string,
+  minutes: number,
+): Mail => ({
+  to: '',
+  subject: `${code} is your Tredella reset code`,
+  text: `Hi ${name},\n\nYour Tredella password reset code is ${code}.\nIt expires in ${minutes} minutes.\n\nIf you didn't request this, you can ignore this email — your password stays unchanged.`,
+  html: `
+    <div style="font-family:Poppins,Arial,sans-serif;max-width:520px;margin:0 auto;padding:32px 24px;color:#4b566b">
+      <h1 style="color:#2b3445;font-size:20px;margin:0 0 16px">Reset your password</h1>
+      <p style="margin:0 0 12px">Hi ${name},</p>
+      <p style="margin:0 0 24px">
+        Enter this code to choose a new password. It expires in
+        <strong>${minutes} minutes</strong>.
+      </p>
+      <p style="margin:0 0 24px;font-size:32px;font-weight:700;letter-spacing:8px;color:#e94560">
+        ${code}
+      </p>
+      <p style="margin:24px 0 0;font-size:13px;color:#7d879c">
+        Didn't request this? You can safely ignore this email — your password
+        stays unchanged. Never share this code with anyone.
+      </p>
+    </div>
+  `,
+});
+
 export const passwordResetEmail = (name: string, link: string): Mail => ({
   to: '',
   subject: 'Reset your Tredella password',

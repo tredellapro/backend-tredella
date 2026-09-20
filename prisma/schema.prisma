@@ -38,13 +38,17 @@ model User {
   @@index([role])
 }
 
-/// Single-use password reset token emailed to the user.
-/// Only the SHA-256 hash is stored, so a database leak cannot be used to
-/// reset accounts; the raw token exists only in the emailed link.
+/// Single-use password reset grant. Two ways in, one way out:
+///   • buyer web  — a long token travels in the emailed link
+///   • seller/admin — a 6-digit code is typed in, then exchanged for a token
+/// Only SHA-256 hashes are stored, so a database leak cannot reset accounts.
+/// `attempts` caps guessing against the short code.
 model PasswordResetToken {
   id        String    @id @default(cuid())
   userId    String
   tokenHash String    @unique
+  codeHash  String? // set for the 6-digit flow, cleared once the code is used
+  attempts  Int       @default(0)
   expiresAt DateTime
   usedAt    DateTime?
   createdAt DateTime  @default(now())
@@ -53,6 +57,7 @@ model PasswordResetToken {
 
   @@index([userId])
   @@index([expiresAt])
+  @@index([codeHash])
 }
 
 model Address {

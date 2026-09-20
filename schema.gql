@@ -34,6 +34,11 @@ type PasswordResetRequestResult {
   emailSent: Boolean!
 }
 
+type PasswordResetTokenPayload {
+  """Single-use token, valid for the rest of the reset window"""
+  token: String!
+}
+
 type Category {
   id: ID!
   slug: String!
@@ -361,10 +366,29 @@ enum SortBy {
 
 type Mutation {
   register(name: String!, email: String!, password: String!): AuthPayload!
-  login(email: String!, password: String!): AuthPayload!
+  login(
+    email: String!
+    password: String!
+
+    """
+    Reject the sign-in unless the account has this role. Each dashboard passes its own.
+    """
+    requireRole: UserRole
+  ): AuthPayload!
+
+  """Creates a SELLER account together with its storefront"""
+  registerSeller(input: SellerRegisterInput!): AuthPayload!
 
   """Always reports success so the response cannot reveal registered emails"""
   requestPasswordReset(email: String!): PasswordResetRequestResult!
+
+  """
+  Emails a 6-digit code instead of a link — used by the seller and admin dashboards
+  """
+  requestPasswordResetCode(email: String!): PasswordResetRequestResult!
+
+  """Exchanges a correct 6-digit code for a resetPassword token"""
+  verifyPasswordResetCode(email: String!, code: String!): PasswordResetTokenPayload!
 
   """Signs the user straight in once the new password is saved"""
   resetPassword(token: String!, newPassword: String!): AuthPayload!
@@ -386,6 +410,28 @@ type Mutation {
   sendMessage(conversationId: ID!, text: String!, attachment: String): Message!
   markMessageAsRead(conversationId: ID!): Boolean!
   markNotificationAsRead(id: ID): Boolean!
+}
+
+"""Account roles. Used to scope an operation to one dashboard."""
+enum UserRole {
+  BUYER
+  SELLER
+  ADMIN
+}
+
+input SellerRegisterInput {
+  firstName: String!
+  lastName: String!
+  email: String!
+  password: String!
+
+  """
+  Country the store ships from, e.g. "Pakistan"
+  """
+  country: String
+
+  """Public store name. Defaults to the seller's own name."""
+  storeName: String
 }
 
 input AddressInput {

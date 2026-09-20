@@ -130,6 +130,21 @@ Deploy to a persistent host (Railway, Render, Fly) instead if you need both.
 - **Reviews** — only for `COMPLETED` order items, one per item, enforced server-side.
 - **Chat** — `BUYER_SELLER`, `BUYER_ADMIN`, `SELLER_ADMIN` conversation types;
   real-time via GraphQL subscriptions over WebSocket.
+- **One login, scoped per app** — `login(…, requireRole: SELLER)` rejects an
+  account that does not hold that role, so a buyer cannot reach the seller
+  dashboard and vice versa. Omitting `requireRole` keeps the buyer site's
+  behaviour unchanged.
+- **Two password-reset routes to the same door** — the buyer site emails a link
+  (`requestPasswordReset` → `/reset-password?token=…`); the dashboards email a
+  6-digit code (`requestPasswordResetCode` → `verifyPasswordResetCode`), which
+  exchanges the code for a token. Both end at the same `resetPassword` mutation.
+  The code path deliberately carries no URL, so one `APP_URL` cannot point the
+  mail at the wrong app. Codes are HMAC-keyed with the server secret (a plain
+  digest of a million possibilities would not survive a leaked table), expire in
+  15 minutes, are single-use, and lock out after 5 wrong attempts.
+- **Seller signup** — `registerSeller` creates the `User` (role SELLER) and its
+  `Seller` storefront in one transaction, deriving a unique slug from the store
+  name and mapping the chosen country to `Seller.shipsFrom`.
 - **Dynamic filters** — product attributes power category-specific facets;
   nothing category-specific is hardcoded in the frontend.
 - **String "enums"** — order/conversation/notification statuses are validated

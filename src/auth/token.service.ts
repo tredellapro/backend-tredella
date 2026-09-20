@@ -40,6 +40,28 @@ export class TokenService {
     return crypto.createHash('sha256').update(token).digest('hex');
   }
 
+  /* A 6-digit code has only a million values, so a plain digest would fall to
+     an offline sweep of a leaked table. Keying the HMAC with the server secret
+     means the database alone is not enough, and binding it to the user id stops
+     one account's code from working on another. */
+  hashResetCode(userId: string, code: string): string {
+    return crypto
+      .createHmac('sha256', this.secret)
+      .update(`${userId}:${code}`)
+      .digest('hex');
+  }
+
+  /** Constant-time compare for the hex digests above. */
+  digestsMatch(a: string, b: string): boolean {
+    const left = Buffer.from(a, 'hex');
+    const right = Buffer.from(b, 'hex');
+    return (
+      left.length === right.length &&
+      left.length > 0 &&
+      crypto.timingSafeEqual(left, right)
+    );
+  }
+
   /** HMAC secret for the short-lived OAuth `state` parameter. */
   get stateSecret(): string {
     return this.secret;
