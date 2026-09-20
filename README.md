@@ -1,41 +1,86 @@
 # backend-tredella
 
 GraphQL API for the Tredella multi-vendor marketplace (retail + wholesale, AED).
-Consumed by the Next.js buyer website today and a React Native app later —
-all business rules (tier pricing, stock, review eligibility, order splitting)
-live here, never in the frontend.
+Consumed by the Next.js buyer website today, the seller and admin dashboards
+next, and a React Native app later — all business rules (tier pricing, stock,
+review eligibility, order splitting) live here, never in the frontend.
 
 ## Stack
 
-- Node.js + Express + TypeScript
-- Apollo Server (GraphQL) + graphql-ws subscriptions (chat, notifications)
-- Prisma ORM — SQLite in dev (zero setup), PostgreSQL-ready schema
-- JWT auth with BUYER / SELLER / ADMIN roles (dashboards come later)
+- **NestJS 11** + TypeScript (modular, DI, guards)
+- **GraphQL code-first** via `@nestjs/graphql` + Apollo Server 5
+- `graphql-ws` subscriptions (chat, notifications)
+- **Prisma ORM** → PostgreSQL
+- JWT auth with BUYER / SELLER / ADMIN roles
 
 ## Quick start
 
 ```bash
 npm install
-npm run db:push     # create the dev database
+npm run db:push     # push the schema to DATABASE_URL
 npm run db:seed     # 56 products, 4 sellers, demo users
 npm run dev         # http://localhost:4000/graphql
 ```
 
 Demo logins (password `password123`): `buyer@tredella.com`, `admin@tredella.com`.
 
-## Switching to PostgreSQL
+Copy `.env.example` to `.env` first — `DATABASE_URL` and `JWT_SECRET` are required.
 
-1. In `prisma/schema.prisma` set `provider = "postgresql"`.
-2. Set `DATABASE_URL` to your PostgreSQL connection string.
-3. `npm run db:push && npm run db:seed`.
+## Project layout
 
-The schema intentionally avoids SQLite-only or Postgres-only features
-(string-validated enums in `src/lib/constants.ts`), so no other changes are needed.
+Each domain is a Nest module owning its models, service and resolvers:
+
+```
+src/
+  main.ts                 bootstrap: CORS, body limit, static /uploads
+  app.module.ts           root module + GraphQL driver and context
+  schema.gql              generated SDL (also written to /schema.gql)
+
+  prisma/                 PrismaService (global)
+  common/                 enums, errors, pricing, pagination, guards, decorators
+  auth/                   login/register/reset + JWT + OAuth controller
+  users/                  me, addresses
+  catalog/                categories, products, search, facets
+  sellers/                storefronts
+  cart/  wishlist/  orders/
+  reviews/  questions/
+  chat/                   conversations, messages, subscriptions
+  notifications/
+  uploads/                review photo endpoint (REST — multipart)
+  health/                 GET / and /health
+  tools/generate-schema   prints the SDL without booting the app
+```
+
+### Conventions
+
+- **Auth** — the GraphQL context resolves the caller once per request (or once
+  per socket on connect). `@UseGuards(GqlAuthGuard)` requires a signed-in user;
+  `@Roles('SELLER')` + `RolesGuard` restricts by role. Read the caller with
+  `@CurrentUser()`.
+- **Errors** — `badInput` / `unauthenticated` / `forbidden` in
+  `src/common/errors.ts` produce the `BAD_USER_INPUT`, `UNAUTHENTICATED` and
+  `FORBIDDEN` extension codes the web clients branch on.
+- **Timestamps** — exposed as ISO `String` via the `isoDate` field middleware,
+  not a Date scalar.
+
+### Schema stability
+
+`schema.gql` is generated, committed, and must stay in step with the clients:
+
+```bash
+npm run schema:generate     # rebuilds and rewrites schema.gql
+```
+
+It runs without a database, so it is safe in CI — fail the build if
+`git diff --exit-code schema.gql` reports a change you did not intend.
 
 ## Deploying to Vercel
 
-The repo ships a serverless entry (`api/index.ts`) and `vercel.json`, so
-importing this repo into Vercel works with no extra config.
+The repo ships a serverless entry (`api/index.js`) and `vercel.json`.
+`api/index.js` is deliberately plain JavaScript that loads the **compiled**
+app from `dist/`: Vercel transpiles `api/` with esbuild, which does not emit
+the decorator metadata Nest's dependency injection needs, while
+`npm run build` (tsc) does.
 
 **Environment variables to set in Vercel → Settings → Environment Variables:**
 
@@ -72,13 +117,13 @@ features degrade automatically rather than break:
   connection. Messages still send and load, they just don't stream live.
   `/health` reports `realtime: false` there.
 - **Review photo uploads** — `/upload/review-images` returns a clear 503.
-  Wire up S3 or Cloudinary in `src/uploads.ts` to enable them.
+  Wire up S3 or Cloudinary in `src/uploads/` to enable them.
 
 Deploy to a persistent host (Railway, Render, Fly) instead if you need both.
 
 ## Architecture notes
 
-- **Pricing security** — `src/lib/pricing.ts` is the only price source.
+- **Pricing security** — `src/common/pricing.ts` is the only price source.
   `createOrder` recalculates every line from DB tiers; client prices are ignored.
 - **Multi-vendor orders** — one checkout creates a main `Order` plus one
   `SellerOrder` per seller (independent status, future commissions/payouts).
@@ -87,3 +132,6 @@ Deploy to a persistent host (Railway, Render, Fly) instead if you need both.
   real-time via GraphQL subscriptions over WebSocket.
 - **Dynamic filters** — product attributes power category-specific facets;
   nothing category-specific is hardcoded in the frontend.
+- **String "enums"** — order/conversation/notification statuses are validated
+  strings (`src/common/constants.ts`) rather than native DB enums, so the schema
+  stays portable. `Mode` and `SortBy` are real GraphQL enums at the API edge.
