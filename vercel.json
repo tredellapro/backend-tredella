@@ -1,11 +1,12 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
-  "buildCommand": "npx prisma generate",
+  "buildCommand": "npx prisma generate && npx nest build",
   "outputDirectory": "public",
   "functions": {
-    "api/index.ts": {
-      "maxDuration": 30
+    "api/index.js": {
+      "maxDuration": 30,
+      "includeFiles": "dist/**"
     }
   },
   "rewrites": [{ "source": "/(.*)", "destination": "/api/index" }]

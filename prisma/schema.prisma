@@ -38,13 +38,17 @@ model User {
   @@index([role])
 }
 
-/// Single-use password reset token emailed to the user.
-/// Only the SHA-256 hash is stored, so a database leak cannot be used to
-/// reset accounts; the raw token exists only in the emailed link.
+/// Single-use password reset grant. Two ways in, one way out:
+///   • buyer web  — a long token travels in the emailed link
+///   • seller/admin — a 6-digit code is typed in, then exchanged for a token
+/// Only SHA-256 hashes are stored, so a database leak cannot reset accounts.
+/// `attempts` caps guessing against the short code.
 model PasswordResetToken {
   id        String    @id @default(cuid())
   userId    String
   tokenHash String    @unique
+  codeHash  String? // set for the 6-digit flow, cleared once the code is used
+  attempts  Int       @default(0)
   expiresAt DateTime
   usedAt    DateTime?
   createdAt DateTime  @default(now())
@@ -53,6 +57,7 @@ model PasswordResetToken {
 
   @@index([userId])
   @@index([expiresAt])
+  @@index([codeHash])
 }
 
 model Address {
@@ -89,10 +94,166 @@ model Seller {
   joinedAt         DateTime @default(now())
   userId           String?  @unique
 
-  user         User?          @relation(fields: [userId], references: [id])
-  products     Product[]
-  sellerOrders SellerOrder[]
+  /// ---- UAE trade registration (private: never exposed on the public Seller type) ----
+  /// Name exactly as printed on the trade licence, which may differ from the
+  /// trading name buyers see in `name`.
+  legalName          String?
+  /// SOLE_ESTABLISHMENT | LLC | FREE_ZONE | BRANCH | CIVIL_COMPANY
+  legalForm          String?
+  /// DUBAI | ABU_DHABI | SHARJAH | AJMAN | UMM_AL_QUWAIN | RAS_AL_KHAIMAH | FUJAIRAH
+  emirate            String?
+  addressLine        String?
+  phone              String?
+  tradeLicenseNumber String?
+  tradeLicenseExpiry DateTime?
+  emiratesIdNumber   String?
+  /// 15-digit VAT number. Optional: UAE registration is only mandatory above
+  /// AED 375,000 annual turnover.
+  trn                String?
+
+  /// UNSUBMITTED | PENDING | APPROVED | REJECTED
+  verificationStatus String    @default("UNSUBMITTED")
+  /// Reviewer's reason, shown to the seller when REJECTED
+  verificationNote   String?
+  submittedAt        DateTime?
+  reviewedAt         DateTime?
+
+  user          User?            @relation(fields: [userId], references: [id])
+  products      Product[]
+  sellerOrders  SellerOrder[]
   conversations Conversation[]
+  documents     SellerDocument[]
+  subscription  Subscription?
+
+  @@index([verificationStatus])
+}
+
+/// A subscription tier a seller can buy. Reference data, seeded and editable
+/// from admin later — prices are not hardcoded in the apps.
+model Plan {
+  id             String  @id @default(cuid())
+  /// BASIC | STANDARD
+  code           String  @unique
+  name           String
+  tagline        String?
+  /// Prices in AED. The quarterly figure is already discounted, so nothing has
+  /// to recompute a percentage at checkout.
+  monthlyPrice   Float
+  quarterlyPrice Float
+  currency       String  @default("AED")
+  sortOrder      Int     @default(0)
+  active         Boolean @default(true)
+
+  features      PlanFeature[]
+  subscriptions Subscription[]
+
+  @@index([active, sortOrder])
+}
+
+/// A row on a plan card. `kind` separates the ticked/crossed benefit list from
+/// the explanatory notes beneath it.
+model PlanFeature {
+  id       String  @id @default(cuid())
+  planId   String
+  /// FEATURE | NOTE
+  kind     String  @default("FEATURE")
+  /// Bold lead-in, used by NOTE rows ("No Additional Fees")
+  title    String?
+  label    String
+  /// FEATURE rows render a cross when false
+  included Boolean @default(true)
+  position Int     @default(0)
+
+  plan Plan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@index([planId])
+}
+
+/// Where a seller stands on a plan.
+///
+/// No payment gateway is connected yet — the client picks the bank later — so
+/// `provider` is FREE and subscriptions activate without a charge. Everything a
+/// gateway needs is already modelled (billing period, auto-renew, provider
+/// references), so connecting one does not reshape this table.
+model Subscription {
+  id       String @id @default(cuid())
+  sellerId String @unique
+  planId   String
+
+  /// MONTHLY | QUARTERLY
+  interval String
+  /// AED that is (or would be) charged each period
+  amount   Float
+  currency String @default("AED")
+  /// ACTIVE | PAST_DUE | CANCELLED | EXPIRED
+  status   String @default("ACTIVE")
+
+  autoRenew          Boolean  @default(true)
+  currentPeriodStart DateTime
+  currentPeriodEnd   DateTime
+  cancelledAt        DateTime?
+
+  /// FREE until a gateway is chosen, then STRIPE | TELR | PAYTABS | NGENIUS
+  provider               String  @default("FREE")
+  providerCustomerId     String?
+  providerSubscriptionId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  seller   Seller    @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  plan     Plan      @relation(fields: [planId], references: [id])
+  payments Payment[]
+
+  @@index([status])
+  @@index([currentPeriodEnd])
+}
+
+/// One billing period's charge. Written even while the product is free (amount
+/// recorded, status WAIVED) so the ledger is continuous the day a gateway is
+/// connected, rather than starting mid-history.
+model Payment {
+  id             String @id @default(cuid())
+  subscriptionId String
+
+  amount   Float
+  currency String @default("AED")
+  /// PENDING | PAID | FAILED | WAIVED | REFUNDED
+  status   String @default("WAIVED")
+
+  periodStart DateTime
+  periodEnd   DateTime
+
+  provider          String  @default("FREE")
+  providerPaymentId String?
+  failureReason     String?
+  paidAt            DateTime?
+
+  createdAt DateTime @default(now())
+
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@index([subscriptionId])
+  @@index([status])
+}
+
+/// A KYC file backing the seller's registration. One current file per type —
+/// re-uploading replaces it, so the record is always what a reviewer should read.
+/// Types: TRADE_LICENSE | EMIRATES_ID_FRONT | EMIRATES_ID_BACK | VAT_CERTIFICATE
+model SellerDocument {
+  id         String   @id @default(cuid())
+  sellerId   String
+  type       String
+  url        String
+  fileName   String
+  mimeType   String
+  sizeBytes  Int
+  uploadedAt DateTime @default(now())
+
+  seller Seller @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+
+  @@unique([sellerId, type])
+  @@index([sellerId])
 }
 
 model Category {
@@ -379,6 +540,9 @@ model Notification {
   title     String
   body      String?
   link      String?
+  /// Thumbnail beside the row — the product, the promotion artwork, whatever
+  /// the notification is about. Falls back to a type icon when empty.
+  image     String?
   readAt    DateTime?
   createdAt DateTime  @default(now())
 
