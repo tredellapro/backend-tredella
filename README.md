@@ -24,6 +24,17 @@ npm run dev         # http://localhost:4000/graphql
 
 Demo logins (password `password123`): `buyer@tredella.com`, `admin@tredella.com`.
 
+For the seller dashboard, add a preview seller — an approved store on a plan,
+with notifications to look at:
+
+```bash
+npm run db:demo     # demo@tredella.com / demo1234
+```
+
+Unlike `db:seed` this clears nothing, so it is safe to run against a database
+that already has real data. The seller app's login page shows a
+"Preview with demo account" button in development that signs in as it.
+
 Copy `.env.example` to `.env` first — `DATABASE_URL` and `JWT_SECRET` are required.
 
 ## Project layout
