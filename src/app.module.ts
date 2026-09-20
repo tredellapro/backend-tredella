@@ -2,7 +2,6 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { GraphQLModule } from '@nestjs/graphql';
 import { ApolloDriver, type ApolloDriverConfig } from '@nestjs/apollo';
-import { join } from 'node:path';
 import type { Request } from 'express';
 
 import { PrismaModule } from './prisma/prisma.module';
@@ -71,12 +70,12 @@ const buildContext = (tokens: TokenService, ctx: ContextArg): GqlContext => {
       useFactory: (
         tokens: TokenService,
       ): Omit<ApolloDriverConfig, 'driver'> => ({
-        /* Same path `npm run schema:generate` writes, so a stray `git diff` on
-           schema.gql always means the API contract really changed.
-           Vercel's filesystem is read-only, so it stays in memory there. */
-        autoSchemaFile: process.env.VERCEL
-          ? true
-          : join(process.cwd(), 'schema.gql'),
+        /* Built in memory, never written to disk. The committed schema.gql is
+           produced solely by `npm run schema:generate`, so a stray `git diff` on
+           it always means the API contract really changed — running the server
+           used to rewrite the same file in a different format and show a
+           phantom diff. (It also suits a read-only serverless filesystem.) */
+        autoSchemaFile: true,
         sortSchema: false,
         introspection: true,
         context: (ctx: ContextArg): GqlContext => buildContext(tokens, ctx),
