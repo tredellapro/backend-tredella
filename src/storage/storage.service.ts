@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { v2 as cloudinary, type UploadApiResponse } from 'cloudinary';
+import type { v2 as CloudinaryApi, UploadApiResponse } from 'cloudinary';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -20,12 +20,52 @@ export type StoredFile = {
 
 const UPLOAD_DIR = path.resolve(process.cwd(), 'uploads');
 
+/**
+ * A CLOUDINARY_URL that is present but unusable must not count as configured.
+ * The obvious case is someone copying .env.example and leaving the placeholder
+ * in — treat that as "no object storage" and fall back to disk.
+ */
+const isUsableCloudinaryUrl = (url?: string): boolean => {
+  if (!url || url.includes('<') || url.includes('>')) return false;
+  try {
+    const parsed = new URL(url);
+    return (
+      parsed.protocol === 'cloudinary:' &&
+      Boolean(parsed.username && parsed.password && parsed.hostname)
+    );
+  } catch {
+    return false;
+  }
+};
+
 @Injectable()
 export class StorageService {
   private readonly logger = new Logger(StorageService.name);
   private readonly useCloudinary: boolean;
   private readonly diskAvailable: boolean;
   private readonly publicUrl: string;
+  private readonly explicitCredentials: {
+    cloud_name: string;
+    api_key: string;
+    api_secret: string;
+  } | null;
+  private sdk: typeof CloudinaryApi | null = null;
+
+  /**
+   * Loaded on first use, never at import: the cloudinary package parses
+   * CLOUDINARY_URL as the module loads and throws on a malformed one, which
+   * would take the whole API down at boot rather than just disabling uploads.
+   */
+  private cloudinary(): typeof CloudinaryApi {
+    if (!this.sdk) {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const mod = require('cloudinary') as { v2: typeof CloudinaryApi };
+      if (this.explicitCredentials) mod.v2.config(this.explicitCredentials);
+      mod.v2.config({ secure: true });
+      this.sdk = mod.v2;
+    }
+    return this.sdk;
+  }
 
   constructor(private readonly config: ConfigService) {
     const url = this.config.get<string>('CLOUDINARY_URL');
@@ -33,13 +73,19 @@ export class StorageService {
     const apiKey = this.config.get<string>('CLOUDINARY_API_KEY');
     const apiSecret = this.config.get<string>('CLOUDINARY_API_SECRET');
 
-    this.useCloudinary = Boolean(url || (cloudName && apiKey && apiSecret));
-    if (this.useCloudinary) {
-      // CLOUDINARY_URL is picked up from the environment on its own
-      if (cloudName && apiKey && apiSecret)
-        cloudinary.config({ cloud_name: cloudName, api_key: apiKey, api_secret: apiSecret });
-      cloudinary.config({ secure: true });
-    }
+    this.explicitCredentials =
+      cloudName && apiKey && apiSecret
+        ? { cloud_name: cloudName, api_key: apiKey, api_secret: apiSecret }
+        : null;
+
+    this.useCloudinary = Boolean(
+      this.explicitCredentials || isUsableCloudinaryUrl(url),
+    );
+
+    if (url && !isUsableCloudinaryUrl(url) && !this.explicitCredentials)
+      this.logger.warn(
+        'CLOUDINARY_URL is set but not a usable cloudinary:// URL — falling back to local disk.',
+      );
 
     this.diskAvailable = !this.useCloudinary && this.ensureDiskDir();
     this.publicUrl =
@@ -87,7 +133,7 @@ export class StorageService {
     folder: string,
   ): Promise<StoredFile> {
     return new Promise((resolve, reject) => {
-      const stream = cloudinary.uploader.upload_stream(
+      const stream = this.cloudinary().uploader.upload_stream(
         {
           folder: `tredella/${folder}`,
           // "auto" lets one call take both PDFs and images
@@ -129,7 +175,7 @@ export class StorageService {
   async remove(key: string): Promise<void> {
     try {
       if (this.useCloudinary) {
-        await cloudinary.uploader.destroy(key, { resource_type: 'image' });
+        await this.cloudinary().uploader.destroy(key, { resource_type: 'image' });
         return;
       }
       await fs.promises.unlink(path.join(UPLOAD_DIR, key));
