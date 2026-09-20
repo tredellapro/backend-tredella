@@ -69,7 +69,13 @@ export class ChatService {
     return messages.reverse();
   }
 
-  /** Reuses an existing thread for the same buyer/seller/product triple. */
+  /**
+   * Reuses an existing thread rather than opening a second one.
+   *
+   * SELLER_ADMIN is the seller dashboard's support thread: the seller is on it
+   * as the seller, not as a buyer, so it carries no buyerId and is deduped on
+   * the seller alone.
+   */
   async startConversation(
     userId: string,
     type: string,
@@ -77,8 +83,14 @@ export class ChatService {
     productId?: string | null,
     orderId?: string | null,
   ): Promise<Conversation> {
-    if (type !== 'BUYER_SELLER' && type !== 'BUYER_ADMIN')
-      throw badInput('Buyers can start seller or admin conversations.');
+    if (
+      type !== 'BUYER_SELLER' &&
+      type !== 'BUYER_ADMIN' &&
+      type !== 'SELLER_ADMIN'
+    )
+      throw badInput('Unknown conversation type.');
+
+    const sellerThread = type === 'SELLER_ADMIN';
 
     let sellerId: string | null = null;
     if (type === 'BUYER_SELLER') {
@@ -90,8 +102,14 @@ export class ChatService {
       sellerId = seller.id;
     }
 
+    if (sellerThread) {
+      const seller = await this.prisma.seller.findUnique({ where: { userId } });
+      if (!seller) throw badInput('Only a seller can open this conversation.');
+      sellerId = seller.id;
+    }
+
     let adminId: string | null = null;
-    if (type === 'BUYER_ADMIN') {
+    if (type === 'BUYER_ADMIN' || sellerThread) {
       const admin = await this.prisma.user.findFirst({
         where: { role: 'ADMIN' },
       });
@@ -100,14 +118,16 @@ export class ChatService {
     }
 
     const existing = await this.prisma.conversation.findFirst({
-      where: { type, buyerId: userId, sellerId, productId: productId ?? null },
+      where: sellerThread
+        ? { type, sellerId, productId: null }
+        : { type, buyerId: userId, sellerId, productId: productId ?? null },
     });
     if (existing) return existing;
 
     return this.prisma.conversation.create({
       data: {
         type,
-        buyerId: userId,
+        buyerId: sellerThread ? null : userId,
         sellerId,
         adminId,
         productId: productId ?? null,
@@ -150,17 +170,28 @@ export class ChatService {
       conversationId,
     });
 
-    // notify the other party
+    /* Notify whoever is on the thread and is not the sender. A SELLER_ADMIN
+       thread has no buyer at all, so "the other party" has to be found
+       generally rather than assumed to be buyer-versus-everyone-else. */
     const recipientId =
-      conversation.buyerId === userId
-        ? (conversation.seller?.userId ?? conversation.adminId)
-        : conversation.buyerId;
+      [
+        conversation.buyerId,
+        conversation.seller?.userId ?? null,
+        conversation.adminId,
+      ].find((id): id is string => Boolean(id) && id !== userId) ?? null;
+
     if (recipientId) {
+      // a seller reads their messages in the dashboard, not the storefront
+      const link =
+        recipientId === conversation.seller?.userId
+          ? `/dashboard/messages?c=${conversationId}`
+          : `/account/messages?c=${conversationId}`;
+
       await this.notifications.notify(recipientId, {
         type: 'MESSAGE',
         title: 'New message',
         body: text.trim().slice(0, 80),
-        link: `/account/messages?c=${conversationId}`,
+        link,
       });
     }
 

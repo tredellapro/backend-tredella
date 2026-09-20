@@ -42,6 +42,11 @@ export class Conversation {
   @Field(() => Seller, { nullable: true })
   seller!: Seller | null;
 
+  /** Null on a SELLER_ADMIN thread, which has no buyer on it. Lets the seller
+      dashboard name who is on the other end of a BUYER_SELLER thread. */
+  @Field(() => PublicUser, { nullable: true })
+  buyer!: PublicUser | null;
+
   @Field(() => Product, { nullable: true })
   product!: Product | null;
 

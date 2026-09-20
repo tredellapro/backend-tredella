@@ -109,3 +109,125 @@ export const passwordResetEmail = (name: string, link: string): Mail => ({
     </div>
   `,
 });
+
+/* ------------------------------------------------------ order status --- */
+
+/** Order states a buyer is told about, matching Order.status. */
+export type OrderStatus =
+  | 'PENDING'
+  | 'CONFIRMED'
+  | 'SHIPPED'
+  | 'DELIVERED'
+  | 'COMPLETED'
+  | 'CANCELLED';
+
+const ORDER_STATUS_LABEL: Record<OrderStatus, string> = {
+  PENDING: 'received',
+  CONFIRMED: 'confirmed',
+  SHIPPED: 'shipped',
+  DELIVERED: 'delivered',
+  COMPLETED: 'complete',
+  CANCELLED: 'cancelled',
+};
+
+const ORDER_STATUS_LINE: Record<OrderStatus, string> = {
+  PENDING: 'We have received your order and are getting it ready.',
+  CONFIRMED: 'Your order is confirmed and is being prepared for dispatch.',
+  SHIPPED: 'Your order is on its way.',
+  DELIVERED: 'Your order has been delivered.',
+  COMPLETED: 'Your order is complete. Thank you for shopping with Tredella.',
+  CANCELLED:
+    'Your order has been cancelled. Any payment already taken will be refunded.',
+};
+
+export type OrderTracking = {
+  companyName: string;
+  trackingNumber?: string;
+  trackingLink?: string;
+};
+
+/**
+ * Sent to the buyer whenever a seller moves an order on.
+ *
+ * Tracking is only included once there is something to track — a "shipped"
+ * mail with an empty courier box is worse than one without the box.
+ */
+export const orderStatusEmail = (
+  name: string,
+  orderId: string,
+  status: OrderStatus,
+  tracking?: OrderTracking | null,
+  cancellationReason?: string | null,
+): Mail => {
+  const label = ORDER_STATUS_LABEL[status];
+  const line = ORDER_STATUS_LINE[status];
+
+  const trackingText =
+    status === 'SHIPPED' && tracking
+      ? `\n\nCarrier: ${tracking.companyName}${
+          tracking.trackingNumber ? `\nTracking number: ${tracking.trackingNumber}` : ''
+        }${tracking.trackingLink ? `\nTrack it: ${tracking.trackingLink}` : ''}`
+      : '';
+
+  const reasonText =
+    status === 'CANCELLED' && cancellationReason
+      ? `\n\nReason: ${cancellationReason}`
+      : '';
+
+  const trackingHtml =
+    status === 'SHIPPED' && tracking
+      ? `
+      <table style="width:100%;border-collapse:collapse;margin:0 0 24px;font-size:14px">
+        <tr style="background:#f6f9fc">
+          <td style="padding:8px 12px;color:#7d879c">Carrier</td>
+          <td style="padding:8px 12px;text-align:right;color:#2b3445;font-weight:600">${tracking.companyName}</td>
+        </tr>
+        ${
+          tracking.trackingNumber
+            ? `<tr>
+          <td style="padding:8px 12px;color:#7d879c">Tracking number</td>
+          <td style="padding:8px 12px;text-align:right;color:#2b3445;font-weight:600">${tracking.trackingNumber}</td>
+        </tr>`
+            : ''
+        }
+      </table>
+      ${
+        tracking.trackingLink
+          ? `<a href="${tracking.trackingLink}"
+             style="display:inline-block;background:#e94560;color:#fff;text-decoration:none;
+                    padding:12px 28px;border-radius:4px;font-weight:600">
+            Track your parcel
+          </a>`
+          : ''
+      }`
+      : '';
+
+  const reasonHtml =
+    status === 'CANCELLED' && cancellationReason
+      ? `<p style="margin:0 0 24px;padding:12px;background:#f6f9fc;border-radius:4px">
+           <strong style="color:#2b3445">Reason:</strong> ${cancellationReason}
+         </p>`
+      : '';
+
+  return {
+    to: '',
+    subject: `Order ${orderId} — ${label}`,
+    text: `Hi ${name},\n\n${line}\n\nOrder number: ${orderId}${trackingText}${reasonText}\n\nThank you for shopping with Tredella.`,
+    html: `
+    <div style="font-family:Poppins,Arial,sans-serif;max-width:520px;margin:0 auto;padding:32px 24px;color:#4b566b">
+      <h1 style="color:#2b3445;font-size:20px;margin:0 0 16px">Your order is ${label}</h1>
+      <p style="margin:0 0 12px">Hi ${name},</p>
+      <p style="margin:0 0 24px">${line}</p>
+      <p style="margin:0 0 24px;font-size:14px">
+        Order number: <strong style="color:#2b3445">${orderId}</strong>
+      </p>
+      ${reasonHtml}
+      ${trackingHtml}
+      <p style="margin:24px 0 0;font-size:13px;color:#7d879c">
+        Questions about this order? Reply to this email and the seller will pick
+        it up.
+      </p>
+    </div>
+  `,
+  };
+};

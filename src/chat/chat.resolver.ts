@@ -76,6 +76,14 @@ export class ConversationsResolver {
     });
   }
 
+  @ResolveField(() => PublicUser, { nullable: true })
+  buyer(
+    @Parent() conversation: PrismaConversation,
+  ): Promise<PrismaUser | null> {
+    if (!conversation.buyerId) return Promise.resolve(null);
+    return this.prisma.user.findUnique({ where: { id: conversation.buyerId } });
+  }
+
   @ResolveField(() => Product, { nullable: true })
   product(
     @Parent() conversation: PrismaConversation,

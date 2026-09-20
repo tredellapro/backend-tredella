@@ -477,6 +477,7 @@ type Conversation {
   id: ID!
   type: String!
   seller: Seller
+  buyer: PublicUser
   product: Product
   orderId: String
   lastMessage: Message
