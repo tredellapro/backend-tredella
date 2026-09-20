@@ -15,6 +15,7 @@ import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { CatalogModule } from './catalog/catalog.module';
 import { SellersModule } from './sellers/sellers.module';
+import { BillingModule } from './billing/billing.module';
 import { ReviewsModule } from './reviews/reviews.module';
 import { QuestionsModule } from './questions/questions.module';
 import { CartModule } from './cart/cart.module';
@@ -97,6 +98,7 @@ const buildContext = (tokens: TokenService, ctx: ContextArg): GqlContext => {
     UsersModule,
     CatalogModule,
     SellersModule,
+    BillingModule,
     ReviewsModule,
     QuestionsModule,
     CartModule,

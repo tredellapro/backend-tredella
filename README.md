@@ -151,6 +151,19 @@ Deploy to a persistent host (Railway, Render, Fly) instead if you need both.
   turns true when a reviewer approves. Registration data lives on a separate
   `SellerAccount` type behind `@Roles('SELLER')` — the public `Seller` type a
   shopper can query exposes none of it.
+- **Plans and subscriptions** — two tiers (AED 150 and AED 200 a month; quarterly
+  is the three-month total less 10%, so 405 and 540). Prices live in the `Plan`
+  table, not in the apps, and are seeded on first boot when the table is empty.
+  `Plan.price(interval:)` returns the figure for a period so no client repeats
+  the discount rule.
+- **No payment gateway yet** — the client picks the bank once the product is
+  done, so `PaymentProvider` is a one-method seam with `FreePaymentProvider`
+  bound in `BillingModule`. Choosing a plan activates it immediately and the
+  period is recorded as a `WAIVED` payment, which keeps the ledger continuous
+  rather than starting the day a card is first charged. `subscribeToPlan`
+  already returns `checkoutUrl`; a real provider fills it with a hosted payment
+  page and leaves the subscription `PAST_DUE` until its webhook confirms. Adding
+  a gateway means writing one class and swapping one binding.
 - **File storage** — `StorageService` picks Cloudinary when `CLOUDINARY_URL` is
   set and local disk otherwise, so uploads keep working on a serverless host.
   `/upload/seller-document` takes PDFs as well as images (licences are usually

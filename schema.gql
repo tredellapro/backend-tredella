@@ -255,6 +255,117 @@ enum VerificationStatus {
   REJECTED
 }
 
+"""One row on a plan card."""
+type PlanFeature {
+  id: ID!
+  kind: PlanFeatureKind!
+
+  """Bold lead-in on a NOTE row"""
+  title: String
+  label: String!
+
+  """FEATURE rows render a cross when false"""
+  included: Boolean!
+  position: Int!
+}
+
+"""FEATURE rows tick or cross; NOTE rows are the explanatory text."""
+enum PlanFeatureKind {
+  FEATURE
+  NOTE
+}
+
+type Plan {
+  id: ID!
+
+  """BASIC | STANDARD"""
+  code: String!
+  name: String!
+  tagline: String
+  monthlyPrice: Float!
+
+  """Three-month total, already 10% off"""
+  quarterlyPrice: Float!
+
+  """ISO code — AED"""
+  currency: String!
+  sortOrder: Int!
+  features: [PlanFeature!]!
+
+  """Price for the interval asked for, so clients do no arithmetic"""
+  price(interval: BillingInterval! = MONTHLY): Float!
+}
+
+"""How often a subscription renews. Quarterly is 10% cheaper."""
+enum BillingInterval {
+  MONTHLY
+  QUARTERLY
+}
+
+"""One billing period's charge."""
+type Payment {
+  id: ID!
+  amount: Float!
+  currency: String!
+  status: PaymentStatus!
+  periodStart: String!
+  periodEnd: String!
+
+  """FREE until a gateway is connected"""
+  provider: String!
+  failureReason: String
+  paidAt: String
+  createdAt: String!
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  WAIVED
+  REFUNDED
+}
+
+"""A seller's plan. Named apart from GraphQL's root Subscription type."""
+type SellerSubscription {
+  id: ID!
+  plan: Plan!
+  interval: BillingInterval!
+
+  """AED charged each period"""
+  amount: Float!
+  currency: String!
+  status: SubscriptionStatus!
+  autoRenew: Boolean!
+  currentPeriodStart: String!
+  currentPeriodEnd: String!
+  cancelledAt: String
+
+  """FREE until a gateway is connected"""
+  provider: String!
+  payments: [Payment!]!
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAST_DUE
+  CANCELLED
+  EXPIRED
+}
+
+"""Result of choosing a plan. Follow checkoutUrl when it is set."""
+type CheckoutSession {
+  subscription: SellerSubscription!
+
+  """
+  Hosted payment page to redirect to. Null while no gateway is connected — the plan is already active.
+  """
+  checkoutUrl: String
+
+  """True when nothing is owed and the plan is live right away"""
+  activated: Boolean!
+}
+
 type PublicUser {
   id: ID!
   name: String!
@@ -401,6 +512,12 @@ type Query {
 
   """The signed-in seller's own store, including KYC state"""
   mySellerAccount: SellerAccount!
+
+  """Seller subscription tiers, cheapest first"""
+  getPlans: [Plan!]!
+
+  """The seller's current plan, or null if they skipped"""
+  mySubscription: SellerSubscription
   getProductReviews(productId: ID!, page: Int = 1, pageSize: Int = 10): ReviewConnection!
   getProductQuestions(productId: ID!): [Question!]!
   getCart(mode: Mode!): Cart!
@@ -481,6 +598,14 @@ type Mutation {
 
   """Removes an uploaded document so it can be replaced"""
   removeSellerDocument(type: SellerDocumentType!): Boolean!
+
+  """
+  Choose a plan. Redirect to checkoutUrl when it is set; when null the plan is already active.
+  """
+  subscribeToPlan(planCode: String!, interval: BillingInterval!): CheckoutSession!
+
+  """Stop renewal; the plan stays usable until the period ends"""
+  cancelSubscription: SellerSubscription!
   createReview(orderItemId: ID!, rating: Int!, text: String!, images: [String!]): Review!
   askProductQuestion(productId: ID!, text: String!): Question!
   addToCart(quantity: Int!, mode: Mode!, productId: ID, productSlug: String): Cart!

@@ -123,8 +123,118 @@ model Seller {
   sellerOrders  SellerOrder[]
   conversations Conversation[]
   documents     SellerDocument[]
+  subscription  Subscription?
 
   @@index([verificationStatus])
+}
+
+/// A subscription tier a seller can buy. Reference data, seeded and editable
+/// from admin later — prices are not hardcoded in the apps.
+model Plan {
+  id             String  @id @default(cuid())
+  /// BASIC | STANDARD
+  code           String  @unique
+  name           String
+  tagline        String?
+  /// Prices in AED. The quarterly figure is already discounted, so nothing has
+  /// to recompute a percentage at checkout.
+  monthlyPrice   Float
+  quarterlyPrice Float
+  currency       String  @default("AED")
+  sortOrder      Int     @default(0)
+  active         Boolean @default(true)
+
+  features      PlanFeature[]
+  subscriptions Subscription[]
+
+  @@index([active, sortOrder])
+}
+
+/// A row on a plan card. `kind` separates the ticked/crossed benefit list from
+/// the explanatory notes beneath it.
+model PlanFeature {
+  id       String  @id @default(cuid())
+  planId   String
+  /// FEATURE | NOTE
+  kind     String  @default("FEATURE")
+  /// Bold lead-in, used by NOTE rows ("No Additional Fees")
+  title    String?
+  label    String
+  /// FEATURE rows render a cross when false
+  included Boolean @default(true)
+  position Int     @default(0)
+
+  plan Plan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@index([planId])
+}
+
+/// Where a seller stands on a plan.
+///
+/// No payment gateway is connected yet — the client picks the bank later — so
+/// `provider` is FREE and subscriptions activate without a charge. Everything a
+/// gateway needs is already modelled (billing period, auto-renew, provider
+/// references), so connecting one does not reshape this table.
+model Subscription {
+  id       String @id @default(cuid())
+  sellerId String @unique
+  planId   String
+
+  /// MONTHLY | QUARTERLY
+  interval String
+  /// AED that is (or would be) charged each period
+  amount   Float
+  currency String @default("AED")
+  /// ACTIVE | PAST_DUE | CANCELLED | EXPIRED
+  status   String @default("ACTIVE")
+
+  autoRenew          Boolean  @default(true)
+  currentPeriodStart DateTime
+  currentPeriodEnd   DateTime
+  cancelledAt        DateTime?
+
+  /// FREE until a gateway is chosen, then STRIPE | TELR | PAYTABS | NGENIUS
+  provider               String  @default("FREE")
+  providerCustomerId     String?
+  providerSubscriptionId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  seller   Seller    @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  plan     Plan      @relation(fields: [planId], references: [id])
+  payments Payment[]
+
+  @@index([status])
+  @@index([currentPeriodEnd])
+}
+
+/// One billing period's charge. Written even while the product is free (amount
+/// recorded, status WAIVED) so the ledger is continuous the day a gateway is
+/// connected, rather than starting mid-history.
+model Payment {
+  id             String @id @default(cuid())
+  subscriptionId String
+
+  amount   Float
+  currency String @default("AED")
+  /// PENDING | PAID | FAILED | WAIVED | REFUNDED
+  status   String @default("WAIVED")
+
+  periodStart DateTime
+  periodEnd   DateTime
+
+  provider          String  @default("FREE")
+  providerPaymentId String?
+  failureReason     String?
+  paidAt            DateTime?
+
+  createdAt DateTime @default(now())
+
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@index([subscriptionId])
+  @@index([status])
 }
 
 /// A KYC file backing the seller's registration. One current file per type —

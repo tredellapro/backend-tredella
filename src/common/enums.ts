@@ -75,6 +75,48 @@ registerEnumType(VerificationStatus, {
   description: 'Where a seller stands in trade-licence review.',
 });
 
+/* ---------------- billing ---------------- */
+
+export enum BillingInterval {
+  MONTHLY = 'MONTHLY',
+  QUARTERLY = 'QUARTERLY',
+}
+
+registerEnumType(BillingInterval, {
+  name: 'BillingInterval',
+  description: 'How often a subscription renews. Quarterly is 10% cheaper.',
+});
+
+export enum SubscriptionStatus {
+  ACTIVE = 'ACTIVE',
+  PAST_DUE = 'PAST_DUE',
+  CANCELLED = 'CANCELLED',
+  EXPIRED = 'EXPIRED',
+}
+
+registerEnumType(SubscriptionStatus, { name: 'SubscriptionStatus' });
+
+export enum PaymentStatus {
+  PENDING = 'PENDING',
+  PAID = 'PAID',
+  FAILED = 'FAILED',
+  /** No gateway connected yet, so the period was granted without a charge. */
+  WAIVED = 'WAIVED',
+  REFUNDED = 'REFUNDED',
+}
+
+registerEnumType(PaymentStatus, { name: 'PaymentStatus' });
+
+export enum PlanFeatureKind {
+  FEATURE = 'FEATURE',
+  NOTE = 'NOTE',
+}
+
+registerEnumType(PlanFeatureKind, {
+  name: 'PlanFeatureKind',
+  description: 'FEATURE rows tick or cross; NOTE rows are the explanatory text.',
+});
+
 export enum SortBy {
   RELEVANCE = 'RELEVANCE',
   NEWEST = 'NEWEST',

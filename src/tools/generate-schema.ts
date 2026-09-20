@@ -17,6 +17,10 @@ import {
 import { ProductsResolver } from '../catalog/products.resolver';
 import { SellersResolver } from '../sellers/sellers.resolver';
 import { SellerAccountResolver } from '../sellers/seller-account.resolver';
+import {
+  PlansResolver,
+  SubscriptionResolver,
+} from '../billing/billing.resolver';
 import { ReviewsResolver } from '../reviews/reviews.resolver';
 import { QuestionsResolver } from '../questions/questions.resolver';
 import { CartResolver } from '../cart/cart.resolver';
@@ -45,6 +49,8 @@ export const RESOLVERS = [
   ProductsResolver,
   SellersResolver,
   SellerAccountResolver,
+  PlansResolver,
+  SubscriptionResolver,
   ReviewsResolver,
   QuestionsResolver,
   CartResolver,
