@@ -5,6 +5,7 @@ import {
   type ArgumentsHost,
   type ExceptionFilter,
 } from '@nestjs/common';
+import { GraphQLError } from 'graphql';
 import type { Response } from 'express';
 
 /* The web clients read `{ error }` from these REST endpoints, so failures are
@@ -15,14 +16,27 @@ export class JsonErrorFilter implements ExceptionFilter {
     const response = host.switchToHttp().getResponse<Response>();
     if (response.headersSent) return;
 
-    const status =
-      exception instanceof HttpException
-        ? exception.getStatus()
-        : HttpStatus.BAD_REQUEST;
-
-    response.status(status).json({ error: messageOf(exception) });
+    response.status(statusOf(exception)).json({ error: messageOf(exception) });
   }
 }
+
+/* Services are shared with the GraphQL layer, so one may throw a GraphQLError
+   into a REST handler. Map its code rather than flattening everything to 400. */
+const GRAPHQL_CODE_STATUS: Record<string, number> = {
+  UNAUTHENTICATED: HttpStatus.UNAUTHORIZED,
+  FORBIDDEN: HttpStatus.FORBIDDEN,
+  BAD_USER_INPUT: HttpStatus.BAD_REQUEST,
+};
+
+const statusOf = (exception: unknown): number => {
+  if (exception instanceof HttpException) return exception.getStatus();
+  if (exception instanceof GraphQLError) {
+    const code = exception.extensions?.code;
+    if (typeof code === 'string' && GRAPHQL_CODE_STATUS[code])
+      return GRAPHQL_CODE_STATUS[code];
+  }
+  return HttpStatus.BAD_REQUEST;
+};
 
 const messageOf = (exception: unknown): string => {
   if (exception instanceof HttpException) {

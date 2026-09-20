@@ -7,6 +7,7 @@ import type { Request } from 'express';
 
 import { PrismaModule } from './prisma/prisma.module';
 import { PubSubModule } from './common/pubsub/pubsub.module';
+import { StorageModule } from './storage/storage.module';
 import { MailModule } from './mail/mail.module';
 import { TokenModule } from './auth/token.module';
 import { TokenService } from './auth/token.service';
@@ -58,6 +59,7 @@ const buildContext = (tokens: TokenService, ctx: ContextArg): GqlContext => {
     ConfigModule.forRoot({ isGlobal: true, cache: true }),
     PrismaModule,
     PubSubModule,
+    StorageModule,
     TokenModule,
     MailModule,
 

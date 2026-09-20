@@ -179,6 +179,82 @@ type HomePageData {
   categories: [Category!]!
 }
 
+"""A KYC file backing the seller registration."""
+type SellerDocument {
+  id: ID!
+  type: SellerDocumentType!
+  url: String!
+  fileName: String!
+  mimeType: String!
+  sizeBytes: Int!
+  uploadedAt: String!
+}
+
+enum SellerDocumentType {
+  TRADE_LICENSE
+  EMIRATES_ID_FRONT
+  EMIRATES_ID_BACK
+  VAT_CERTIFICATE
+}
+
+type SellerAccount {
+  id: ID!
+  slug: String!
+
+  """Trading name shown to buyers"""
+  name: String!
+  logo: String
+
+  """Name as printed on the trade licence"""
+  legalName: String
+  legalForm: LegalForm
+  emirate: Emirate
+  addressLine: String
+  phone: String
+  tradeLicenseNumber: String
+  tradeLicenseExpiry: String
+  emiratesIdNumber: String
+
+  """15-digit VAT number; only required above AED 375,000 turnover"""
+  trn: String
+  verificationStatus: VerificationStatus!
+
+  """Reviewer's reason, set when the status is REJECTED"""
+  verificationNote: String
+  submittedAt: String
+  documents: [SellerDocument!]!
+
+  """Document types still missing before this can be submitted"""
+  missingDocuments: [SellerDocumentType!]!
+}
+
+"""Legal form as stated on the trade licence."""
+enum LegalForm {
+  SOLE_ESTABLISHMENT
+  LLC
+  FREE_ZONE
+  BRANCH
+  CIVIL_COMPANY
+}
+
+enum Emirate {
+  DUBAI
+  ABU_DHABI
+  SHARJAH
+  AJMAN
+  UMM_AL_QUWAIN
+  RAS_AL_KHAIMAH
+  FUJAIRAH
+}
+
+"""Where a seller stands in trade-licence review."""
+enum VerificationStatus {
+  UNSUBMITTED
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 type PublicUser {
   id: ID!
   name: String!
@@ -322,6 +398,9 @@ type Query {
   searchSuggestions(query: String!, mode: Mode!): [String!]!
   getSeller(slug: String!): Seller
   getSellerProducts(sellerSlug: String!, mode: Mode!, filter: ProductFilterInput, sortBy: SortBy = RELEVANCE, page: Int = 1, pageSize: Int = 12): ProductConnection!
+
+  """The signed-in seller's own store, including KYC state"""
+  mySellerAccount: SellerAccount!
   getProductReviews(productId: ID!, page: Int = 1, pageSize: Int = 10): ReviewConnection!
   getProductQuestions(productId: ID!): [Question!]!
   getCart(mode: Mode!): Cart!
@@ -394,6 +473,14 @@ type Mutation {
   resetPassword(token: String!, newPassword: String!): AuthPayload!
   changePassword(currentPassword: String!, newPassword: String!): Boolean!
   addAddress(input: AddressInput!): Address!
+
+  """
+  Saves the trade-registration details and puts the store in the review queue
+  """
+  submitSellerVerification(input: SellerVerificationInput!): SellerAccount!
+
+  """Removes an uploaded document so it can be replaced"""
+  removeSellerDocument(type: SellerDocumentType!): Boolean!
   createReview(orderItemId: ID!, rating: Int!, text: String!, images: [String!]): Review!
   askProductQuestion(productId: ID!, text: String!): Question!
   addToCart(quantity: Int!, mode: Mode!, productId: ID, productSlug: String): Cart!
@@ -442,6 +529,30 @@ input AddressInput {
   city: String!
   country: String
   isDefault: Boolean
+}
+
+input SellerVerificationInput {
+  """Trading name shown to buyers"""
+  storeName: String!
+
+  """Name exactly as printed on the trade licence"""
+  legalName: String!
+  legalForm: LegalForm!
+  emirate: Emirate!
+  addressLine: String!
+
+  """UAE number in +9715XXXXXXXX form"""
+  phone: String!
+  tradeLicenseNumber: String!
+
+  """ISO date (YYYY-MM-DD) the licence expires"""
+  tradeLicenseExpiry: String!
+
+  """15 digits, formatted 784-YYYY-NNNNNNN-N"""
+  emiratesIdNumber: String!
+
+  """VAT number. Leave empty below the AED 375,000 registration threshold."""
+  trn: String
 }
 
 type Subscription {

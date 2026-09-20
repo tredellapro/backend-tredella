@@ -27,6 +27,54 @@ registerEnumType(UserRole, {
   description: 'Account roles. Used to scope an operation to one dashboard.',
 });
 
+/* ---------------- UAE seller registration ---------------- */
+
+export enum Emirate {
+  DUBAI = 'DUBAI',
+  ABU_DHABI = 'ABU_DHABI',
+  SHARJAH = 'SHARJAH',
+  AJMAN = 'AJMAN',
+  UMM_AL_QUWAIN = 'UMM_AL_QUWAIN',
+  RAS_AL_KHAIMAH = 'RAS_AL_KHAIMAH',
+  FUJAIRAH = 'FUJAIRAH',
+}
+
+registerEnumType(Emirate, { name: 'Emirate' });
+
+export enum LegalForm {
+  SOLE_ESTABLISHMENT = 'SOLE_ESTABLISHMENT',
+  LLC = 'LLC',
+  FREE_ZONE = 'FREE_ZONE',
+  BRANCH = 'BRANCH',
+  CIVIL_COMPANY = 'CIVIL_COMPANY',
+}
+
+registerEnumType(LegalForm, {
+  name: 'LegalForm',
+  description: 'Legal form as stated on the trade licence.',
+});
+
+export enum SellerDocumentType {
+  TRADE_LICENSE = 'TRADE_LICENSE',
+  EMIRATES_ID_FRONT = 'EMIRATES_ID_FRONT',
+  EMIRATES_ID_BACK = 'EMIRATES_ID_BACK',
+  VAT_CERTIFICATE = 'VAT_CERTIFICATE',
+}
+
+registerEnumType(SellerDocumentType, { name: 'SellerDocumentType' });
+
+export enum VerificationStatus {
+  UNSUBMITTED = 'UNSUBMITTED',
+  PENDING = 'PENDING',
+  APPROVED = 'APPROVED',
+  REJECTED = 'REJECTED',
+}
+
+registerEnumType(VerificationStatus, {
+  name: 'VerificationStatus',
+  description: 'Where a seller stands in trade-licence review.',
+});
+
 export enum SortBy {
   RELEVANCE = 'RELEVANCE',
   NEWEST = 'NEWEST',

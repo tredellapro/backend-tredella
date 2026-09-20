@@ -145,6 +145,16 @@ Deploy to a persistent host (Railway, Render, Fly) instead if you need both.
 - **Seller signup** — `registerSeller` creates the `User` (role SELLER) and its
   `Seller` storefront in one transaction, deriving a unique slug from the store
   name and mapping the chosen country to `Seller.shipsFrom`.
+- **UAE trade registration** — a seller uploads their trade licence and Emirates
+  ID (plus a VAT certificate if they hold a TRN), then `submitSellerVerification`
+  validates the details and moves the store to `PENDING`. `Seller.verified` only
+  turns true when a reviewer approves. Registration data lives on a separate
+  `SellerAccount` type behind `@Roles('SELLER')` — the public `Seller` type a
+  shopper can query exposes none of it.
+- **File storage** — `StorageService` picks Cloudinary when `CLOUDINARY_URL` is
+  set and local disk otherwise, so uploads keep working on a serverless host.
+  `/upload/seller-document` takes PDFs as well as images (licences are usually
+  PDFs) and caps files at 4MB to stay under Vercel's request limit.
 - **Dynamic filters** — product attributes power category-specific facets;
   nothing category-specific is hardcoded in the frontend.
 - **String "enums"** — order/conversation/notification statuses are validated
