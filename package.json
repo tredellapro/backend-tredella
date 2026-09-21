@@ -15,7 +15,8 @@
     "db:generate": "prisma generate",
     "schema:generate": "nest build && node dist/tools/generate-schema.js schema.gql",
     "type-check": "tsc --noEmit",
-    "plans:sync": "tsx prisma/sync-plans.ts"
+    "plans:sync": "tsx prisma/sync-plans.ts",
+    "admin:create": "tsx prisma/create-admin.ts"
   },
   "dependencies": {
     "@apollo/server": "^5.5.1",
