@@ -3,10 +3,8 @@ import type { Seller, SellerDocument } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { badInput, forbidden } from '../common/errors';
-import {
-  REQUIRED_SELLER_DOCUMENTS,
-  type SellerDocumentType,
-} from '../common/constants';
+import { type SellerDocumentType } from '../common/constants';
+import { missingDocuments } from './verification-rules';
 import type { SellerAccount } from './models/seller-account.model';
 import type { SellerVerificationInput } from './dto/seller-verification.input';
 import {
@@ -38,11 +36,15 @@ export class SellerAccountService {
   }
 
   private toAccount(seller: SellerWithDocuments): SellerAccount {
-    const present = new Set(seller.documents.map((d) => d.type));
     return {
       ...seller,
-      missingDocuments: REQUIRED_SELLER_DOCUMENTS.filter(
-        (type) => !present.has(type),
+      /* Shared with the admin's approval check rather than a flat list of
+         three: a VAT certificate is required only when the seller gave a TRN.
+         Before this, a seller with a TRN and no certificate was told nothing
+         was missing, then refused at review with no explanation. */
+      missingDocuments: missingDocuments(
+        seller.trn,
+        seller.documents.map((document) => document.type as SellerDocumentType),
       ),
     } as unknown as SellerAccount;
   }
@@ -152,18 +154,18 @@ export class SellerAccountService {
     if (seller.verificationStatus === 'APPROVED')
       throw badInput('Your store is already verified.');
 
-    const present = new Set(seller.documents.map((d) => d.type));
-    const missing = REQUIRED_SELLER_DOCUMENTS.filter((t) => !present.has(t));
+    const trn = normaliseTrn(input.trn);
+
+    /* One check, not two: `missingDocuments` already knows a VAT certificate
+       is required exactly when a TRN is given. The TRN here is the incoming
+       one, since it is being set by this very call. */
+    const missing = missingDocuments(
+      trn,
+      seller.documents.map((document) => document.type as SellerDocumentType),
+    );
     if (missing.length)
       throw badInput(
         `Upload your ${missing.map(readableDocument).join(' and ')} before submitting.`,
-      );
-
-    const trn = normaliseTrn(input.trn);
-    // a VAT certificate without a number on it cannot be checked
-    if (trn && !present.has('VAT_CERTIFICATE'))
-      throw badInput(
-        'You entered a TRN, so please also upload your VAT certificate.',
       );
 
     const storeName = input.storeName.trim();

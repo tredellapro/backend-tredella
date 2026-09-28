@@ -512,6 +512,14 @@ type Query {
   """Listings waiting on a decision — drives the review badge."""
   adminProductsAwaitingReview: Int!
 
+  """
+  Seller trade registrations. Awaiting review first, then oldest submission first.
+  """
+  adminSellerRegistrations(status: String): [SellerAccount!]!
+
+  """Registrations waiting on a decision — drives the queue badge."""
+  adminSellersAwaitingReview: Int!
+
   """Checks a reset link before showing the new-password form"""
   verifyResetToken(token: String!): Boolean!
   me: User
@@ -593,6 +601,16 @@ type Mutation {
   Approve or reject a listing. Approving clears it for sale; it does not change what the seller chose to offer.
   """
   reviewProduct(productId: ID!, status: ApprovalStatus!, note: String): Product!
+
+  """
+  Approve or reject a trade registration. Approving is what puts the verified mark on a store.
+  """
+  reviewSellerRegistration(sellerId: ID!, status: VerificationDecision!, note: String): SellerAccount!
+
+  """
+  Remove a document that is wrong. This is the only way a seller gets an upload slot back — their own removeSellerDocument refuses once the store is approved.
+  """
+  removeSellerDocumentAsAdmin(sellerId: ID!, type: SellerDocumentType!, note: String): SellerAccount!
   register(name: String!, email: String!, password: String!): AuthPayload!
   login(
     email: String!
@@ -655,6 +673,12 @@ type Mutation {
   sendMessage(conversationId: ID!, text: String!, attachment: String): Message!
   markMessageAsRead(conversationId: ID!): Boolean!
   markNotificationAsRead(id: ID): Boolean!
+}
+
+"""Approve or reject a seller trade registration."""
+enum VerificationDecision {
+  APPROVED
+  REJECTED
 }
 
 """Account roles. Used to scope an operation to one dashboard."""
