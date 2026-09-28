@@ -124,4 +124,19 @@ export class Product {
 
   @Field(() => String, { middleware: [isoDate] })
   createdAt!: Date;
+
+  /* Exposed so the seller dashboard can tell its owner why a listing is not
+     on sale, and the admin console can show the queue. Buyers only ever
+     receive APPROVED products — `modeWhere` filters the rest out before this
+     is read — so there is nothing here a shopper could act on. */
+  @Field(() => String, {
+    description: 'PENDING | APPROVED | REJECTED — an admin decision'
+  })
+  approvalStatus!: string;
+
+  @Field(() => String, {
+    nullable: true,
+    description: "The reviewer's reason, set when the status is REJECTED"
+  })
+  approvalNote?: string | null;
 }

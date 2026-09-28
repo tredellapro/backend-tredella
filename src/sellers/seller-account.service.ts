@@ -56,6 +56,12 @@ export class SellerAccountService {
   /**
    * One current file per type: re-uploading replaces the old one, and the
    * previous object is removed from storage so nothing is orphaned.
+   *
+   * On an APPROVED store a document that is on file cannot be swapped — that
+   * is what makes the approval mean anything. An EMPTY slot is different: it
+   * is empty because an admin took the document away for being wrong, or
+   * because it was never required, and in both cases the seller is expected to
+   * supply one. So the check is per document, not per store.
    */
   async saveDocument(
     userId: string,
@@ -64,17 +70,17 @@ export class SellerAccountService {
   ): Promise<SellerDocument> {
     const seller = await this.requireOwnStore(userId);
 
-    if (seller.verificationStatus === 'APPROVED')
+    const previous = seller.documents.find((d) => d.type === type);
+
+    if (seller.verificationStatus === 'APPROVED' && previous)
       throw badInput(
-        'Your store is already verified. Contact support to change a document.',
+        'This document is already verified. Contact support to change it.',
       );
 
     const stored = await this.storage.upload(
       file,
       `seller-documents/${seller.id}`,
     );
-
-    const previous = seller.documents.find((d) => d.type === type);
 
     const saved = await this.prisma.sellerDocument.upsert({
       where: { sellerId_type: { sellerId: seller.id, type } },

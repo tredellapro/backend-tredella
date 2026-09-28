@@ -308,6 +308,15 @@ model Product {
   freeShipping       Boolean  @default(false)
   createdAt          DateTime @default(now())
 
+  /// ---- admin review ----
+  /// PENDING | APPROVED | REJECTED. A listing is not visible to buyers until
+  /// an admin approves it. `modeWhere` in catalog/product-query.ts is the one
+  /// place buyer-facing visibility is decided, so the check lives there.
+  approvalStatus String    @default("PENDING")
+  /// Reviewer's reason, shown to the seller when REJECTED
+  approvalNote   String?
+  reviewedAt     DateTime?
+
   category    Category            @relation(fields: [categoryId], references: [id])
   subcategory Subcategory         @relation(fields: [subcategoryId], references: [id])
   seller      Seller              @relation(fields: [sellerId], references: [id])
@@ -329,6 +338,7 @@ model Product {
   @@index([wholesaleFrom])
   @@index([rating])
   @@index([createdAt])
+  @@index([approvalStatus])
 }
 
 model ProductImage {

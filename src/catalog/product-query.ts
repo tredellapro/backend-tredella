@@ -2,11 +2,24 @@ import type { Prisma } from '@prisma/client';
 import { Mode, SortBy } from '../common/enums';
 import type { ProductFilterInput } from './dto/product-filter.input';
 
-/** Products a storefront mode is allowed to list. */
-export const modeWhere = (mode: Mode): Prisma.ProductWhereInput =>
-  mode === Mode.WHOLESALE
+/**
+ * Products a storefront mode is allowed to list.
+ *
+ * This is the single place buyer-facing visibility is decided — every public
+ * product path funnels through it — so the admin's approval check belongs
+ * here rather than being repeated at each call site and forgotten at one.
+ *
+ * A listing a seller saves is PENDING until an admin reviews it. Before this
+ * existed, anything a seller typed was live on the storefront immediately.
+ */
+export const APPROVED = 'APPROVED';
+
+export const modeWhere = (mode: Mode): Prisma.ProductWhereInput => ({
+  approvalStatus: APPROVED,
+  ...(mode === Mode.WHOLESALE
     ? { availableWholesale: true }
-    : { availableRetail: true };
+    : { availableRetail: true })
+});
 
 export const buildProductWhere = (
   mode: Mode,

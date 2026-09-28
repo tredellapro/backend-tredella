@@ -35,6 +35,7 @@ import {
   MessagesResolver,
 } from '../chat/chat.resolver';
 import { NotificationsResolver } from '../notifications/notifications.resolver';
+import { AdminResolver } from '../admin/admin.resolver';
 
 /* Prints the generated SDL without booting the app (so no database is needed).
  * Run it in CI to catch accidental schema changes:
@@ -42,6 +43,9 @@ import { NotificationsResolver } from '../notifications/notifications.resolver';
  */
 
 export const RESOLVERS = [
+  /* A resolver left out of this list is silently missing from the committed
+     schema.gql, which is the contract all three front ends read against. */
+  AdminResolver,
   AuthResolver,
   UsersResolver,
   CategoriesResolver,

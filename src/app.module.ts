@@ -11,6 +11,7 @@ import { MailModule } from './mail/mail.module';
 import { TokenModule } from './auth/token.module';
 import { TokenService } from './auth/token.service';
 import { AuthModule } from './auth/auth.module';
+import { AdminModule } from './admin/admin.module';
 import { UsersModule } from './users/users.module';
 import { CatalogModule } from './catalog/catalog.module';
 import { SellersModule } from './sellers/sellers.module';
@@ -94,6 +95,8 @@ const buildContext = (tokens: TokenService, ctx: ContextArg): GqlContext => {
     }),
 
     AuthModule,
+
+    AdminModule,
     UsersModule,
     CatalogModule,
     SellersModule,

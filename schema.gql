@@ -127,6 +127,12 @@ type Product {
   freeShipping: Boolean!
   attributes: [ProductAttribute!]!
   createdAt: String!
+
+  """PENDING | APPROVED | REJECTED — an admin decision"""
+  approvalStatus: String!
+
+  """The reviewer's reason, set when the status is REJECTED"""
+  approvalNote: String
 }
 
 type PageInfo {
@@ -398,6 +404,7 @@ type Question {
   answeredAt: String
   createdAt: String!
   user: PublicUser!
+  product: Product!
 }
 
 type CartItem {
@@ -499,6 +506,12 @@ type Notification {
 }
 
 type Query {
+  """Every listing, including the ones buyers cannot see. Unreviewed first."""
+  adminProducts(status: ApprovalStatus, sellerId: ID, search: String, page: Int = 1, pageSize: Int = 20): [Product!]!
+
+  """Listings waiting on a decision — drives the review badge."""
+  adminProductsAwaitingReview: Int!
+
   """Checks a reset link before showing the new-password form"""
   verifyResetToken(token: String!): Boolean!
   me: User
@@ -524,6 +537,7 @@ type Query {
   mySubscription: SellerSubscription
   getProductReviews(productId: ID!, page: Int = 1, pageSize: Int = 10): ReviewConnection!
   getProductQuestions(productId: ID!): [Question!]!
+  mySellerQuestions(answered: Boolean): [Question!]!
   getCart(mode: Mode!): Cart!
   getWishlist(mode: Mode): [WishlistItem!]!
   getOrders(page: Int = 1, pageSize: Int = 10): [Order!]!
@@ -534,6 +548,13 @@ type Query {
 
   """Unread count for the bell badge, without loading the list"""
   unreadNotificationCount: Int!
+}
+
+"""Where a listing stands with the admin review."""
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }
 
 input ProductFilterInput {
@@ -568,6 +589,10 @@ enum SortBy {
 }
 
 type Mutation {
+  """
+  Approve or reject a listing. Approving clears it for sale; it does not change what the seller chose to offer.
+  """
+  reviewProduct(productId: ID!, status: ApprovalStatus!, note: String): Product!
   register(name: String!, email: String!, password: String!): AuthPayload!
   login(
     email: String!
@@ -615,6 +640,7 @@ type Mutation {
   cancelSubscription: SellerSubscription!
   createReview(orderItemId: ID!, rating: Int!, text: String!, images: [String!]): Review!
   askProductQuestion(productId: ID!, text: String!): Question!
+  answerProductQuestion(questionId: ID!, answer: String!): Question!
   addToCart(quantity: Int!, mode: Mode!, productId: ID, productSlug: String): Cart!
   updateCartItem(cartItemId: ID!, quantity: Int!): Cart!
   removeFromCart(cartItemId: ID!): Cart!
