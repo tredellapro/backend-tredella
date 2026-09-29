@@ -1,6 +1,11 @@
 node_modules/
 dist/
-.env
+# Every env variant, not just .env — this repo holds the database URL, the
+# JWT secret and the Cloudinary credentials, so a stray .env.production here
+# is the worst of the four to leak. The example stays committed on purpose:
+# it documents what to set and carries only placeholders.
+.env*
+!.env.example
 prisma/dev.db
 prisma/dev.db-journal
 *.log
