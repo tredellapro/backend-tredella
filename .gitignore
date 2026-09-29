@@ -10,8 +10,12 @@ prisma/dev.db
 prisma/dev.db-journal
 *.log
 
-# locally uploaded review photos — user content, not source
-uploads/
+# Locally uploaded user content, written by StorageService when no Cloudinary
+# credentials are set. Anchored with a leading slash on purpose: a bare
+# `uploads/` matches a directory of that name at ANY depth, which silently
+# swallowed src/uploads/ — five source files that built locally and were simply
+# absent on the build machine.
+/uploads/
 
 # Vercel
 .vercel/
