@@ -24,6 +24,17 @@ model User {
   avatar    String?
   createdAt DateTime @default(now())
 
+  /// ---- admin console access ----
+  /// SUPER_ADMIN | ADMIN | EDITOR | VIEWER | CUSTOM, or null for a user who is
+  /// not staff. Separate from `role` on purpose: `role` says which app you may
+  /// sign into, this says what you may do once inside the console.
+  /// Only SUPER_ADMIN may grant these, and only one is bootstrapped from the
+  /// environment — see admin/super-admin.bootstrap.ts.
+  staffRole        String?
+  /// Per-section overrides, set only when staffRole is CUSTOM.
+  /// Shape: { "orders": "VIEW", "products": "MANAGE", ... }
+  staffPermissions Json?
+
   addresses     Address[]
   wishlist      WishlistItem[]
   cartItems     CartItem[]
@@ -36,6 +47,7 @@ model User {
   resetTokens   PasswordResetToken[]
 
   @@index([role])
+  @@index([staffRole])
 }
 
 /// Single-use password reset grant. Two ways in, one way out:

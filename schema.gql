@@ -505,6 +505,25 @@ type Notification {
   createdAt: String!
 }
 
+type SectionAccess {
+  section: String!
+
+  """NONE | VIEW | MANAGE"""
+  access: String!
+}
+
+type StaffMember {
+  id: ID!
+  email: String!
+  name: String!
+
+  """SUPER_ADMIN | ADMIN | EDITOR | VIEWER | CUSTOM"""
+  staffRole: String!
+
+  """Every section and the access this member has to it"""
+  permissions: [SectionAccess!]!
+}
+
 type Query {
   """Every listing, including the ones buyers cannot see. Unreviewed first."""
   adminProducts(status: ApprovalStatus, sellerId: ID, search: String, page: Int = 1, pageSize: Int = 20): [Product!]!
@@ -519,6 +538,14 @@ type Query {
 
   """Registrations waiting on a decision — drives the queue badge."""
   adminSellersAwaitingReview: Int!
+
+  """Everyone with console access, super admins first."""
+  adminTeam: [StaffMember!]!
+
+  """
+  The signed-in member's own access, so the console can shape itself to it.
+  """
+  myAdminAccess: [SectionAccess!]!
 
   """Checks a reset link before showing the new-password form"""
   verifyResetToken(token: String!): Boolean!
@@ -611,6 +638,14 @@ type Mutation {
   Remove a document that is wrong. This is the only way a seller gets an upload slot back — their own removeSellerDocument refuses once the store is approved.
   """
   removeSellerDocumentAsAdmin(sellerId: ID!, type: SellerDocumentType!, note: String): SellerAccount!
+
+  """Give an existing account console access, by email. Super admin only."""
+  grantAdminAccess(email: String!, staffRole: String!, permissions: [SectionAccessInput!]): StaffMember!
+
+  """
+  Take console access away. The account itself is left alone. Super admin only.
+  """
+  revokeAdminAccess(userId: ID!): StaffMember!
   register(name: String!, email: String!, password: String!): AuthPayload!
   login(
     email: String!
@@ -679,6 +714,13 @@ type Mutation {
 enum VerificationDecision {
   APPROVED
   REJECTED
+}
+
+input SectionAccessInput {
+  section: String!
+
+  """NONE | VIEW | MANAGE"""
+  access: String!
 }
 
 """Account roles. Used to scope an operation to one dashboard."""

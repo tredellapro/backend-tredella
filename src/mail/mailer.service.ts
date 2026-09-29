@@ -17,9 +17,14 @@ export class MailerService {
   constructor(private readonly config: ConfigService) {
     const host = this.config.get<string>('SMTP_HOST');
     const port = Number(this.config.get<string>('SMTP_PORT') ?? 587);
-    // USER_EMAIL is accepted as an alias for SMTP_USER
+    /* The SMTP username is the sending address for every provider we support,
+       so it gets called three different things in practice. Accept all of
+       them: a mistyped key here fails silently — mail is logged to the console
+       instead of sent, and nobody notices until a password reset never
+       arrives. */
     const user =
       this.config.get<string>('SMTP_USER') ||
+      this.config.get<string>('SMTP_EMAIL') ||
       this.config.get<string>('USER_EMAIL');
     const pass = this.config.get<string>('SMTP_PASS');
 
