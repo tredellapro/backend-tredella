@@ -2,6 +2,7 @@
    /public paths so the frontend renders them directly. */
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import { guardDestructive } from "./guard-destructive";
 
 const prisma = new PrismaClient();
 
@@ -174,6 +175,8 @@ const attributesFor = (item: Item, i: number): { name: string; value: string }[]
 /* ---------------- seed ---------------- */
 
 async function main() {
+  // nineteen deleteMany calls follow; refuse unless this is a local database
+  guardDestructive("db:seed");
   console.log("Clearing existing data...");
   await prisma.$transaction([
     prisma.notification.deleteMany(),
