@@ -4,18 +4,6 @@ const express = require('express');
 const { NestFactory } = require('@nestjs/core');
 const { ExpressAdapter } = require('@nestjs/platform-express');
 
-/* Vercel serverless entry.
- *
- * This file is plain JavaScript and loads the *compiled* app from dist/ on
- * purpose: Vercel transpiles api/ with esbuild, which does not emit the
- * decorator metadata Nest's dependency injection relies on. `npm run build`
- * (tsc, via nest build) does, so the container is wired correctly.
- *
- * Not available here (serverless has no long-lived connections or disk):
- *   • GraphQL subscriptions — chat and notifications fall back to fetch-on-load
- *   • Local file uploads — /uploads needs object storage (S3, Cloudinary, …)
- * Run `npm start` on a persistent host if you need either.
- */
 
 const { AppModule } = require('../dist/app.module');
 const { corsOptions } = require('../dist/common/cors');
