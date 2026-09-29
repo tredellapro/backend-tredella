@@ -18,6 +18,9 @@ export type StoredFile = {
   key: string;
 };
 
+/** Cloudinary access_mode. 'authenticated' keeps an object off the public CDN. */
+export type Visibility = 'public' | 'authenticated';
+
 const UPLOAD_DIR = path.resolve(process.cwd(), 'uploads');
 
 /**
@@ -122,15 +125,17 @@ export class StorageService {
   async upload(
     file: Express.Multer.File,
     folder: string,
+    visibility: Visibility = 'authenticated',
   ): Promise<StoredFile> {
     return this.useCloudinary
-      ? this.uploadToCloudinary(file, folder)
+      ? this.uploadToCloudinary(file, folder, visibility)
       : this.uploadToDisk(file, folder);
   }
 
   private uploadToCloudinary(
     file: Express.Multer.File,
     folder: string,
+    visibility: Visibility,
   ): Promise<StoredFile> {
     return new Promise((resolve, reject) => {
       const stream = this.cloudinary().uploader.upload_stream(
@@ -138,9 +143,12 @@ export class StorageService {
           folder: `tredella/${folder}`,
           // "auto" lets one call take both PDFs and images
           resource_type: 'auto',
-          // KYC documents are not public gallery content
           type: 'upload',
-          access_mode: 'authenticated',
+          /* KYC paperwork stays off the public CDN; a review photo or a chat
+             attachment has to be fetchable by whoever is looking at it, and
+             uploading those as authenticated makes them silently fail to
+             load. */
+          access_mode: visibility,
         },
         (error, result?: UploadApiResponse) => {
           if (error || !result)
